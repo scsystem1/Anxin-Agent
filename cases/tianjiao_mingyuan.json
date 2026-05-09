@@ -1,0 +1,603 @@
+{
+  "case_id": "ANXIN-2024-041501",
+  "case_name": "天骄名苑住宅小区建设项目欠薪案",
+  "version": "1.0",
+
+  "ground_truth": {
+    "project": {
+      "name": "天骄名苑住宅小区 A 区一期工程",
+      "location": "四川省成都市双流区华阳街道兴华路 88 号",
+      "type": "住宅楼（8 栋 18 层高层住宅）",
+      "start_date": "2022-11-01",
+      "main_completion_date": "2023-11-10",
+      "total_area_sqm": 128000
+    },
+    "developer": {
+      "name": "成都天骄置业有限公司",
+      "address": "成都市锦江区顺城大街 99 号",
+      "legal_rep": "吴永福",
+      "social_credit_code": "91510100XX88123456",
+      "role": "建设单位（甲方），已按合同全额支付工程款给宏基建设"
+    },
+    "general_contractor": {
+      "name": "宏基建设集团股份有限公司",
+      "short_name": "宏基",
+      "address": "成都市武侯区武侯大道 200 号",
+      "legal_rep": "陈光明",
+      "project_manager": "张国华",
+      "phone": "028-8888-XXXX",
+      "qualification": "建筑工程施工总承包壹级",
+      "role": "施工总承包，劳务工程分包给恒达，依法对农民工工资负有【先行清偿责任】"
+    },
+    "subcontractor": {
+      "name": "成都恒达劳务有限公司",
+      "short_name": "恒达",
+      "address": "成都市新都区三河街道 45 号",
+      "legal_rep": "蒋海波",
+      "hr_contact": "王培",
+      "phone": "139-0000-XXXX",
+      "qualification": "劳务作业分包 B 级",
+      "role": "从宏基承接砌体工程劳务，违法将施工转包给无资质的包工头李大海，应承担【连带责任】",
+      "facts_hidden_from_worker": {
+        "已于2023-12-05向李大海支付全部劳务款": 1427000,
+        "汇款凭证存于恒达财务档案": true
+      }
+    },
+    "labor_contractor": {
+      "name": "李大海",
+      "id_card": "511321XXXX03291X",
+      "household_residence": "四川省南充市嘉陵区李家坝村",
+      "old_phone": "158-XXXX-3456（已停机）",
+      "current_phone_hidden": "137-XXXX-8888",
+      "current_location_hidden": "湖南省长沙市宁乡市灰汤镇某工地",
+      "owns_vehicle": "川K-XXXXX",
+      "role": "包工头，无任何资质，已收取恒达全部工资款后逃匿，符合拒不支付劳动报酬罪构成要件"
+    },
+    "worker_team_size": 14,
+    "co_workers": [
+      {"name": "王兴林", "role": "赵建国老乡，介绍其入工地，可作为证人", "contact_known_to_worker": true},
+      {"name": "刘强", "role": "同班组工友，亦被欠薪", "contact_known_to_worker": false},
+      {"name": "张伟", "role": "同班组工友，亦被欠薪", "contact_known_to_worker": false}
+    ],
+    "violations": [
+      "恒达将工程违法分包给无用工主体资格的自然人（李大海）",
+      "李大海口头雇用赵建国，无书面劳动合同",
+      "李大海在收到全部劳务款后，故意停机失联，恶意逃避支付"
+    ],
+    "applicable_laws": [
+      "《保障农民工工资支付条例》第30条 - 总包先行清偿",
+      "《保障农民工工资支付条例》第31条 - 违法分包连带责任",
+      "《劳动合同法》第85条 - 加付赔偿金（限期不支付50%-100%）",
+      "《关于确立劳动关系有关事项的通知》第2条 - 无书面合同的事实劳动关系认定",
+      "《劳动争议解释（一）》第49条 - 财产保全免担保",
+      "《刑法》第276条之一 - 拒不支付劳动报酬罪（针对李大海）"
+    ]
+  },
+
+  "worker": {
+    "name": "赵建国",
+    "gender": "男",
+    "age": 52,
+    "birth_date": "1972-11",
+    "id_card": "511321197211XXXX3X",
+    "household_residence": "四川省南充市嘉陵区李家坝镇建国村2组",
+    "education": "小学",
+    "phone_capability": "普通安卓手机，主要用微信和电话",
+    "occupation_history": "2010年起长期在建筑工地打工（砌体工为主），每年春节后进城，11月前后回乡",
+    "psychological_state": [
+      "不确定没有合同能否维权",
+      "不知道该找哪个部门",
+      "担心打官司费用高",
+      "对包工头失联感到无奈，觉得跑了就没办法了",
+      "情绪：焦虑但态度坚决，不想放弃"
+    ],
+    "executor_persona_traits": [
+      "听话，倾向于按军师建议执行",
+      "文化水平低，听不懂复杂法律术语，需要白话解释",
+      "对模糊建议（如\"保留证据\"）执行能力差，常常只做最表面的动作",
+      "对具体建议（如\"打开微信，搜'工资'，把所有截图存到一个文件夹\"）能完整执行",
+      "害怕权威，单独面对官方机构时会紧张",
+      "不会主动思考没被告知的事情"
+    ]
+  },
+
+  "financial": {
+    "currency": "CNY",
+    "daily_wage": 300,
+    "working_days": 282,
+    "total_earned": 84600,
+    "already_paid": 8000,
+    "total_owed": 76600,
+    "wage_period": {
+      "start": "2023-03-05",
+      "end": "2023-11-10"
+    }
+  },
+
+  "timeline": [
+    {"date": "2022-11-01", "event": "宏基建设与恒达劳务签订《劳务分包合同》380万元", "visible_to_worker": false},
+    {"date": "2022-12-15", "event": "恒达劳务与李大海签订《班组承包协议》150万元（违法分包给无资质个人）", "visible_to_worker": false},
+    {"date": "2023-03-01", "event": "赵建国经老乡王兴林介绍认识李大海", "visible_to_worker": true},
+    {"date": "2023-03-05", "event": "赵建国进场施工。同日宏基项目部将其录入《农民工实名制管理台账》", "visible_to_worker": "partial - 工人不知有台账"},
+    {"date": "2023-03-01 - 2023-10-03", "event": "李大海每月通过微信向赵建国转账1000元生活费，共8笔合计8000元", "visible_to_worker": true},
+    {"date": "2023-11-10", "event": "主体结构完工，赵建国最后一个工作日", "visible_to_worker": true},
+    {"date": "2023-11-15", "event": "李大海手写工资结算单，确认欠76,600元，承诺2023年12月底前结清", "visible_to_worker": true},
+    {"date": "2023-11下旬", "event": "赵建国微信催讨，李大海回复\"等甲方结款\"", "visible_to_worker": true},
+    {"date": "2023-12-05", "event": "恒达劳务将李大海班组全部劳务款1,427,000元汇入李大海账户（其中赵建国部分84,600元）", "visible_to_worker": false},
+    {"date": "2023-12-20", "event": "李大海手机停机，微信将赵建国拉黑", "visible_to_worker": true},
+    {"date": "2024-01-10", "event": "赵建国到宏基项目部讨要，被保安拦下，张国华隔门称\"找恒达\"", "visible_to_worker": true},
+    {"date": "2024-01-12", "event": "赵建国到恒达公司，王培称\"已付李大海，跟我们无关\"", "visible_to_worker": true},
+    {"date": "2024-01-15", "event": "赵建国回老家过年", "visible_to_worker": true},
+    {"date": "2024-04-20", "event": "赵建国在表弟推荐下打开\"安薪\"App，演示从此处开始", "visible_to_worker": true}
+  ],
+
+  "evidence_database": {
+    "initial_visible": [
+      {
+        "id": "E001",
+        "name": "手写工资结算单",
+        "details": "李大海亲笔，2023-11-15签字，载明欠付76,600元，承诺12月底结清",
+        "evidentiary_strength": 5,
+        "proves": "欠薪金额及李大海的债务承认"
+      },
+      {
+        "id": "E002",
+        "name": "微信转账记录",
+        "details": "8笔共8000元，备注含\"X月生活费\"",
+        "evidentiary_strength": 4,
+        "proves": "劳动关系存在 + 部分支付事实"
+      },
+      {
+        "id": "E003",
+        "name": "催讨微信记录",
+        "details": "3张截图，李大海回复\"等甲方结款\"",
+        "evidentiary_strength": 4,
+        "proves": "欠薪事实及主观拖延 + 时效中断"
+      },
+      {
+        "id": "E004",
+        "name": "工地施工照片",
+        "details": "赵建国在工地施工的手机照片6张",
+        "evidentiary_strength": 3,
+        "proves": "在该工地工作的事实（辅助）"
+      },
+      {
+        "id": "E005",
+        "name": "工地公示牌照片",
+        "details": "宏基建设+恒达劳务的工地公示牌照片1张",
+        "evidentiary_strength": 3,
+        "proves": "总包和分包主体身份"
+      }
+    ],
+    "discoverable": [
+      {
+        "id": "E006",
+        "name": "农民工实名制管理台账",
+        "obtain_via": "向劳动监察大队投诉总包后由监察员调取",
+        "trigger_actions": ["A006"],
+        "difficulty": "low",
+        "evidentiary_strength": 5,
+        "proves": "赵建国与宏基的事实劳动关系"
+      },
+      {
+        "id": "E007",
+        "name": "农民工工资专用账户记录",
+        "obtain_via": "向当地人社局申请查询",
+        "trigger_actions": ["A005"],
+        "difficulty": "medium",
+        "evidentiary_strength": 4,
+        "proves": "宏基对工资支付的法定管理责任"
+      },
+      {
+        "id": "E008",
+        "name": "恒达→李大海汇款记录（142.7万）",
+        "obtain_via": "劳动监察调查恒达财务，或诉讼中申请法院调取",
+        "trigger_actions": ["A006", "A007", "A014"],
+        "difficulty": "medium",
+        "evidentiary_strength": 4,
+        "proves": "李大海已收款，构成恶意欠薪刑事嫌疑"
+      },
+      {
+        "id": "E009",
+        "name": "恒达-李大海班组承包协议",
+        "obtain_via": "诉讼中申请法院调取",
+        "trigger_actions": ["A007"],
+        "difficulty": "medium",
+        "evidentiary_strength": 3,
+        "proves": "违法分包给无资质个人，连带责任依据"
+      },
+      {
+        "id": "E010",
+        "name": "工友王兴林书面证言",
+        "obtain_via": "联系老乡获取",
+        "trigger_actions": ["A002"],
+        "difficulty": "low",
+        "evidentiary_strength": 3,
+        "proves": "工作事实补强"
+      },
+      {
+        "id": "E011",
+        "name": "李大海现所在地信息",
+        "obtain_via": "公安系统查询",
+        "trigger_actions": ["A015"],
+        "difficulty": "high",
+        "evidentiary_strength": 2,
+        "proves": "对刑事报案有用"
+      }
+    ],
+    "traps": [
+      {
+        "id": "T001",
+        "presented_as": "恒达\"已付李大海\"的汇款凭证",
+        "looks_like": "恒达试图以此完全免责",
+        "actual_legal_position": "付款给包工头不免除分包方违法分包的连带责任",
+        "agent_should": "明确指出连带责任不因中间支付而切断"
+      },
+      {
+        "id": "T002",
+        "presented_as": "宏基出示的内部分包合同",
+        "looks_like": "工人责任只在劳务分包方",
+        "actual_legal_position": "内部承包协议不能对抗劳动者法定权利；总包先行清偿是法定义务",
+        "agent_should": "明确《条例》第30条独立性"
+      },
+      {
+        "id": "T003",
+        "presented_as": "手写结算单无公司章",
+        "looks_like": "证据效力存疑",
+        "actual_legal_position": "手写欠条在无相反证据时具完全法律效力，且可直接起诉跳过仲裁前置",
+        "agent_should": "积极评价E001，提示可走民事诉讼快通道"
+      }
+    ]
+  },
+
+  "worker_initial_knowledge": {
+    "knows": [
+      "持有E001-E005五项初始证据",
+      "工地名称\"天骄名苑\"和总包\"宏基建设\"（从工地牌看到）",
+      "恒达劳务公司名称（去过门口）",
+      "老乡王兴林的联系方式",
+      "李大海的旧电话（已停机）"
+    ],
+    "does_not_know": [
+      "实名制台账的存在以及自己被登记在内",
+      "宏基有\"先行清偿责任\"的法定义务",
+      "恒达已于2023-12-05向李大海付清142.7万",
+      "李大海的现所在地（湖南长沙宁乡）",
+      "可申请免费法律援助（12348热线）",
+      "可申请财产保全免担保",
+      "劳动关系存续期间无仲裁时效限制",
+      "可对李大海以拒不支付劳动报酬罪报案"
+    ]
+  },
+
+  "npcs": [
+    {
+      "id": "li_dahai",
+      "display_name": "李大海（包工头）",
+      "type": "absent_evader",
+      "current_state": "手机停机表面失联，实际在湖南某工地",
+      "if_contacted_via_old_phone": "无法接通",
+      "if_contacted_via_new_phone": "推诿：\"甲方工程款没结，我哪有钱\" / \"等我这边工程结束就给\"，承认欠款但拒绝支付",
+      "criminal_risk": "已收款后逃匿，符合拒不支付劳动报酬罪构成要件"
+    },
+    {
+      "id": "wang_pei",
+      "display_name": "王培（恒达劳务HR / 王主任）",
+      "type": "deflector",
+      "available": true,
+      "phone": "139-0000-XXXX",
+      "default_position": "我们和李大海是班组承包，他独立经营，我们已付清",
+      "common_deflections": [
+        "\"我们和李大海是班组承包协议，他是独立的，我们已经付清了\"",
+        "\"你们的劳动合同是跟李大海签的，不是跟我们\"",
+        "\"我们遵守了合同，你应该去告李大海\""
+      ],
+      "weak_points_agent_can_exploit": [
+        "恒达将工程违法转包给无资质个人 → 必须承担连带责任",
+        "\"已付清包工头\"不等于免责",
+        "恒达有义务保留并配合提供工资台账"
+      ],
+      "behavior_under_pressure": {
+        "no_pressure": "强硬推诿",
+        "labor_inspection_involved": "开始协调，但仍推称法律责任在李大海",
+        "arbitration_filed": "可能主动要求调解"
+      },
+      "evidence_obtainable": ["E008", "E009"]
+    },
+    {
+      "id": "zhang_guohua",
+      "display_name": "张国华（宏基建设项目经理）",
+      "type": "evader",
+      "phone": "028-8888-XXXX（公司总机）",
+      "default_position": "这是劳务公司的事，我们跟农民工没有合同关系",
+      "common_deflections": [
+        "\"这个案子是劳务公司的事，我们跟农民工没有直接合同\"",
+        "\"我们已经把钱全部付给恒达了\"",
+        "\"你让律师来谈\""
+      ],
+      "weak_points_agent_can_exploit": [
+        "先行清偿责任独立于工程款是否结清（《条例》第30条）",
+        "宏基开设了农民工工资专用账户，具有法定管理职责",
+        "实名制台账证明宏基知晓赵建国在项目工作"
+      ],
+      "behavior_under_pressure": {
+        "initial": "装不知道，让找恒达",
+        "labor_inspection_involved": "配合提供台账，依然否认责任",
+        "arbitration_with_asset_freeze": "公司法务接手，开始评估调解",
+        "first_instance_judged": "接受判决或上诉"
+      },
+      "evidence_obtainable": ["E006", "E007"]
+    },
+    {
+      "id": "chen_wei",
+      "display_name": "陈维（双流区劳动监察员）",
+      "type": "neutral_procedural",
+      "agency": "双流区人力资源和社会保障局劳动保障监察大队",
+      "default_position": "依照程序协助处理建筑领域欠薪",
+      "supportive_behaviors": [
+        "告知工人可以要求查看实名制台账",
+        "说明监察有权向总包调取所有台账记录",
+        "告知限期整改程序和后续步骤",
+        "告知可以申请法律援助（12348）"
+      ],
+      "powers": [
+        "向宏基发出调查通知",
+        "调取实名制台账、工资支付台账",
+        "下达《限期整改指令书》",
+        "案件移送仲裁委"
+      ],
+      "limits": "不能直接强制执行（需法院）"
+    }
+  ],
+
+  "action_space": [
+    {
+      "id": "A001",
+      "name": "整理手头已有证据",
+      "category": "evidence",
+      "preconditions": [],
+      "duration_days": 1,
+      "effects": {
+        "evidence_pool_add": ["E001", "E002", "E003", "E004", "E005"],
+        "state_changes": {"已整理证据": true}
+      },
+      "narration": "赵建国把手机里所有跟李大海相关的微信记录都翻了一遍，把工资结算单拍了照片备份"
+    },
+    {
+      "id": "A002",
+      "name": "联系老乡王兴林取得书面证词",
+      "category": "evidence",
+      "preconditions": ["worker_knows_wang_xinglin"],
+      "duration_days": 3,
+      "effects": {
+        "evidence_pool_add": ["E010"]
+      },
+      "narration": "赵建国给王兴林打电话，王兴林同意写一份证词，几天后寄到了赵建国老家"
+    },
+    {
+      "id": "A003",
+      "name": "向劳动监察申请调取实名台账",
+      "category": "evidence",
+      "preconditions": ["procedural_stage>=labor_inspection"],
+      "duration_days": 7,
+      "effects": {
+        "evidence_pool_add": ["E006"]
+      },
+      "narration": "陈科长接受请求，向宏基项目部调取台账"
+    },
+    {
+      "id": "A004",
+      "name": "查询宏基建设工商注册信息",
+      "category": "evidence",
+      "preconditions": [],
+      "duration_days": 1,
+      "effects": {
+        "state_changes": {"知道宏基法定代表人和注册地址": true}
+      }
+    },
+    {
+      "id": "A005",
+      "name": "向人社局申请查询农民工工资专用账户记录",
+      "category": "evidence",
+      "preconditions": ["procedural_stage>=labor_inspection"],
+      "duration_days": 14,
+      "effects": {
+        "evidence_pool_add": ["E007"]
+      }
+    },
+    {
+      "id": "A006",
+      "name": "向劳动监察大队投诉总包",
+      "category": "procedure",
+      "preconditions": ["evidence_pool_size>=2"],
+      "duration_days": 5,
+      "parameters_required": ["target_company"],
+      "correct_target": "宏基建设",
+      "effects": {
+        "procedural_stage": "labor_inspection",
+        "triggers_npc": "chen_wei",
+        "narration_if_correct_target": "陈科长接案，启动对宏基的调查程序",
+        "narration_if_wrong_target": "投诉受理，但部门只对受投诉方调查，错过总包则无法调取关键台账"
+      }
+    },
+    {
+      "id": "A007",
+      "name": "向劳动仲裁委提交申请",
+      "category": "procedure",
+      "preconditions": ["evidence_pool_size>=3"],
+      "duration_days": 30,
+      "parameters_required": ["respondents"],
+      "correct_respondents": ["宏基建设集团", "成都恒达劳务有限公司"],
+      "effects": {
+        "procedural_stage": "arbitration",
+        "evidence_pool_add_if_court_order": ["E009"]
+      }
+    },
+    {
+      "id": "A008",
+      "name": "申请财产保全（援引解释一第49条免担保）",
+      "category": "procedure",
+      "preconditions": ["procedural_stage>=arbitration"],
+      "duration_days": 3,
+      "effects": {
+        "state_changes": {"asset_freeze_active": true, "respondent_pressure": "+++"}
+      }
+    },
+    {
+      "id": "A009",
+      "name": "申请免费法律援助（12348）",
+      "category": "procedure",
+      "preconditions": [],
+      "duration_days": 5,
+      "effects": {
+        "state_changes": {"has_legal_aid_lawyer": true, "worker_capability": "+++"}
+      }
+    },
+    {
+      "id": "A010",
+      "name": "向宏基建设寄送催告函",
+      "category": "procedure",
+      "preconditions": ["state.知道宏基法定代表人和注册地址 == true"],
+      "duration_days": 7,
+      "effects": {
+        "state_changes": {"statute_of_limitations_interrupted": true, "demand_letter_sent": true}
+      }
+    },
+    {
+      "id": "A011",
+      "name": "联系恒达劳务王主任谈判",
+      "category": "communication",
+      "preconditions": [],
+      "duration_days": 1,
+      "effects": {
+        "triggers_npc": "wang_pei"
+      }
+    },
+    {
+      "id": "A012",
+      "name": "对李大海提起拒不支付劳动报酬罪刑事报案",
+      "category": "procedure",
+      "preconditions": ["state.限期整改令已下达 == true", "state.整改期满未支付 == true"],
+      "duration_days": 14,
+      "effects": {
+        "state_changes": {"criminal_case_filed": true, "respondent_pressure": "+++"}
+      }
+    },
+    {
+      "id": "A013",
+      "name": "以欠条直接向法院起诉",
+      "category": "procedure",
+      "preconditions": ["E001 in evidence_pool"],
+      "duration_days": 30,
+      "alternative_to": "A007",
+      "effects": {
+        "procedural_stage": "civil_litigation_direct",
+        "narration": "持有手写欠条可作为劳务合同纠纷直接起诉，跳过仲裁前置"
+      }
+    },
+    {
+      "id": "A014",
+      "name": "询问王主任恒达付款情况",
+      "category": "information",
+      "preconditions": ["recent_npc_interaction.wang_pei"],
+      "duration_days": 1,
+      "effects": {
+        "evidence_pool_add_chance": ["E008"]
+      }
+    },
+    {
+      "id": "A015",
+      "name": "通过公安渠道查找李大海下落",
+      "category": "information",
+      "preconditions": ["state.criminal_case_filed == true"],
+      "duration_days": 14,
+      "effects": {
+        "evidence_pool_add": ["E011"]
+      }
+    },
+    {
+      "id": "A016",
+      "name": "拨打12348法律援助热线了解流程",
+      "category": "information",
+      "preconditions": [],
+      "duration_days": 1,
+      "effects": {
+        "state_changes": {"knows_legal_aid_process": true}
+      }
+    },
+    {
+      "id": "A099",
+      "name": "放弃维权",
+      "category": "terminal",
+      "preconditions": [],
+      "duration_days": 0,
+      "effects": {
+        "procedural_stage": "abandoned",
+        "is_terminal": true
+      }
+    }
+  ],
+
+  "optimal_path": {
+    "description": "高分路径：以宏基为主追责，仲裁+保全+法援+刑事并行",
+    "phases": [
+      {
+        "phase": 0,
+        "name": "案件梳理",
+        "expected_duration_days": 1,
+        "actions": ["A001", "A004", "A009"]
+      },
+      {
+        "phase": 1,
+        "name": "投诉与监察",
+        "expected_duration_days": 30,
+        "actions": ["A006(target=宏基建设)", "A010", "A002", "A003"]
+      },
+      {
+        "phase": 2,
+        "name": "仲裁与保全",
+        "expected_duration_days": 30,
+        "actions": ["A007(respondents=[宏基, 恒达])", "A008"]
+      },
+      {
+        "phase": 3,
+        "name": "并行刑事施压",
+        "expected_duration_days": 14,
+        "condition": "限期整改后仍未支付",
+        "actions": ["A012"]
+      }
+    ],
+    "expected_outcome": {
+      "principal_recovered": 76600,
+      "additional_compensation": 38300,
+      "interest": 4592,
+      "total": 119492,
+      "primary_respondent": "宏基建设集团（先行清偿）",
+      "joint_liability": "恒达劳务（连带）"
+    }
+  },
+
+  "doubao_baseline_predicted_path": {
+    "description": "豆包预期偏差路径：建议先找包工头，对总包责任无认识",
+    "predicted_steps": [
+      "建议先联系包工头协商",
+      "失联后建议向恒达投诉",
+      "提及仲裁但担心无合同难维权",
+      "可能错误提示时效问题",
+      "未告知总包先行清偿、未告知财产保全免担保、未告知法援"
+    ],
+    "predicted_outcome": "陷入恒达-李大海推诿循环，工人可能因此放弃或低价和解"
+  },
+
+  "terminal_conditions": {
+    "success": [
+      "procedural_stage in ['arbitration_award', 'civil_judgment', 'settlement_with_full_payment']",
+      "case_state.principal_recovered >= 0.8 * total_owed"
+    ],
+    "failure": [
+      "procedural_stage == 'abandoned'",
+      "current_day - start_day > 365",
+      "case_state.giving_up_intent_count >= 3"
+    ]
+  }
+}
