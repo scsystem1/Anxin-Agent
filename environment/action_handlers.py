@@ -257,6 +257,37 @@ def handle_A011_negotiate_with_wang_pei(state, action, deps) -> ActionResult:
     )
 
 
+def handle_A014_ask_wang_payment(state, action, deps) -> ActionResult:
+    """Ask Wang Pei specifically about Hengda's payment to Li Dahai."""
+    msg = action.parameters.get(
+        "message",
+        "王主任，你们到底有没有把我们这批工人的钱打给李大海？能不能给我看凭证？",
+    )
+    action.parameters.setdefault("message", msg)
+    npc_resp = deps.npc_manager.interact("wang_pei", msg, state)
+    state.advance_days(1)
+
+    new_evidence = []
+    if state.npc_pressure_level.get("wang_pei", 0) >= 1 or "付款" in npc_resp.text:
+        ev = _add_evidence_from_data(state, "E008", deps.case_data)
+        if ev:
+            new_evidence.append("E008")
+    for ev_id in npc_resp.new_evidence_ids:
+        if not state.has_evidence(ev_id):
+            ev = _add_evidence_from_data(state, ev_id, deps.case_data)
+            if ev and ev_id not in new_evidence:
+                new_evidence.append(ev_id)
+
+    return ActionResult(
+        action=action,
+        success=True,
+        narration=f"赵建国追问恒达付款情况。王主任回应：{npc_resp.text}",
+        new_evidence_ids=new_evidence,
+        npc_interactions=[("wang_pei", npc_resp.text)],
+        days_elapsed=1,
+    )
+
+
 def handle_A012_criminal_report(state, action, deps) -> ActionResult:
     """对李大海提起拒不支付劳动报酬罪刑事报案。"""
     result = handle_default(state, action, deps)
@@ -293,6 +324,106 @@ def handle_A015_find_li_dahai(state, action, deps) -> ActionResult:
     result = handle_default(state, action, deps)
     state.worker_known_facts.add("公安查到李大海在湖南宁乡某工地")
     return result
+
+
+def handle_A017_call_li_dahai(state, action, deps) -> ActionResult:
+    """Call Li Dahai through the known old phone number."""
+    contact_method = action.parameters.get("contact_method", "old_phone")
+    msg = action.parameters.get("message", "李哥，我是赵建国，你欠我的工资什么时候给？")
+    action.parameters.setdefault("contact_method", contact_method)
+    action.parameters.setdefault("message", msg)
+    npc_resp = deps.npc_manager.interact("li_dahai", msg, state, contact_method=contact_method)
+    state.advance_days(1)
+    return ActionResult(
+        action=action,
+        success=True,
+        narration=f"赵建国拨打李大海电话：{npc_resp.text}",
+        npc_interactions=[("li_dahai", npc_resp.text)],
+        days_elapsed=1,
+    )
+
+
+def handle_A018_contact_zhang_guohua(state, action, deps) -> ActionResult:
+    """Contact Hongji project manager Zhang Guohua."""
+    msg = action.parameters.get(
+        "message",
+        "张经理，我在天骄名苑干活，李大海欠我工资。公示牌上写总包是宏基，你们能不能处理？",
+    )
+    action.parameters.setdefault("message", msg)
+    npc_resp = deps.npc_manager.interact("zhang_guohua", msg, state)
+    state.advance_days(1)
+
+    new_evidence = []
+    for ev_id in npc_resp.new_evidence_ids:
+        if not state.has_evidence(ev_id):
+            ev = _add_evidence_from_data(state, ev_id, deps.case_data)
+            if ev:
+                new_evidence.append(ev_id)
+
+    return ActionResult(
+        action=action,
+        success=True,
+        narration=f"赵建国联系宏基项目经理张国华。张国华回应：{npc_resp.text}",
+        new_evidence_ids=new_evidence,
+        npc_interactions=[("zhang_guohua", npc_resp.text)],
+        days_elapsed=1,
+    )
+
+
+def handle_A_FINAL(state, action, deps) -> ActionResult:
+    """Record the final channel choice and document package."""
+    from environment.state import FinalSubmission
+
+    params = action.parameters or {}
+    channel_id = str(params.get("channel_id") or "CH_GIVE_UP")
+    evidence_ids = params.get("evidence_ids_submitted")
+    if not isinstance(evidence_ids, list):
+        evidence_ids = list(state.evidence_pool.keys())
+    respondents = params.get("respondents")
+    if isinstance(respondents, str):
+        respondents = [respondents]
+    if not isinstance(respondents, list):
+        respondents = []
+    docs = params.get("drafted_documents")
+    if not isinstance(docs, list):
+        docs = []
+
+    state.final_submission = FinalSubmission(
+        channel_id=channel_id,
+        channel_name=str(params.get("channel_name") or ""),
+        advisor_reasoning=str(params.get("advisor_reasoning") or ""),
+        drafted_documents=docs,
+        evidence_ids_submitted=[str(e) for e in evidence_ids],
+        respondents=[str(r) for r in respondents],
+    )
+
+    stage_map = {
+        "CH_INSPECTION_ONLY": ProceduralStage.LABOR_INSPECTION_ORDER_ISSUED,
+        "CH_ARBITRATION": ProceduralStage.ARBITRATION_FILED,
+        "CH_DIRECT_LAWSUIT": ProceduralStage.CIVIL_LITIGATION_DIRECT,
+        "CH_CRIMINAL_CIVIL": ProceduralStage.ARBITRATION_FILED,
+        "CH_GIVE_UP": ProceduralStage.ABANDONED,
+    }
+    state.procedural_stage = stage_map.get(channel_id, ProceduralStage.ARBITRATION_FILED)
+
+    if channel_id == "CH_GIVE_UP":
+        state.mark_terminal(TerminalReason.ABANDONED)
+
+    state.advance_days(1 if channel_id != "CH_GIVE_UP" else 0)
+    return ActionResult(
+        action=action,
+        success=True,
+        narration=(
+            f"赵建国按照军师建议，选择「{state.final_submission.channel_name or channel_id}」"
+            f"作为最终渠道，并整理提交了 {len(state.final_submission.evidence_ids_submitted)} 份证据。"
+        ),
+        state_changes={
+            "final_submission_channel": channel_id,
+            "respondents": list(state.final_submission.respondents),
+            "procedural_stage": state.procedural_stage.value,
+        },
+        days_elapsed=1 if channel_id != "CH_GIVE_UP" else 0,
+    )
 
 
 def handle_A099_give_up(state, action, deps) -> ActionResult:
@@ -355,7 +486,11 @@ ACTION_HANDLERS: dict[str, HandlerFn] = {
     "A011": handle_A011_negotiate_with_wang_pei,
     "A012": handle_A012_criminal_report,
     "A013": handle_A013_direct_lawsuit,
+    "A014": handle_A014_ask_wang_payment,
     "A015": handle_A015_find_li_dahai,
+    "A017": handle_A017_call_li_dahai,
+    "A018": handle_A018_contact_zhang_guohua,
+    "A_FINAL": handle_A_FINAL,
     "A099": handle_A099_give_up,
 }
 

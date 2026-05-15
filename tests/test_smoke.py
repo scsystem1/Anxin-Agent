@@ -64,6 +64,17 @@ class FakeLLM:
                 "formal_judgment_text": "本院查明。本院认为。判决如下。",
                 "critical_misses": [],
             }
+        if purpose == "worker_final_submission":
+            return {
+                "channel_id": "CH_ARBITRATION",
+                "channel_name": "劳动仲裁",
+                "advisor_reasoning": "军师让我把两个公司都列上。",
+                "respondents": ["宏基建设集团股份有限公司", "成都恒达劳务有限公司"],
+                "evidence_ids_submitted": ["E001", "E002", "E003", "E006", "E009"],
+                "drafted_documents": [
+                    {"doc_type": "仲裁申请书", "content": "请求支付拖欠工资76600元。"}
+                ],
+            }
         return {}
 
 
@@ -116,6 +127,35 @@ class SandboxSmokeTests(unittest.TestCase):
         self.assertEqual(choice.action.action_id, "A001")
         self.assertEqual(choice.action.parameters["target_company"], "宏基")
 
+    def test_worker_second_turn_uses_incremental_prompt(self):
+        class CaptureLLM(FakeLLM):
+            last_messages = None
+
+            def chat(self, messages, *, temperature=0.7, max_tokens=2048, response_format=None, purpose=""):
+                CaptureLLM.last_messages = messages
+                return "我刚刚整理了证据，下一步咋办？"
+
+        from environment.env import Observation
+        from datetime import date
+
+        worker = SimulatedWorker(llm=CaptureLLM())
+        obs = Observation(
+            day=1,
+            date=date(2024, 4, 21),
+            procedural_stage="initial_intake",
+            recent_events=[
+                "赵建国今天打开了'安薪'App，准备求助。",
+                "赵建国把手机里所有跟李大海相关的微信记录都翻了一遍。",
+            ],
+            actions_taken_summary=["第1天 A001 整理手头已有证据"],
+        )
+        worker.formulate_request(obs)
+        prompt = CaptureLLM.last_messages[0]["content"]
+        self.assertIn("只说增量信息", prompt)
+        self.assertIn("刚刚发生的新进展", prompt)
+        self.assertIn("翻了一遍", prompt)
+        self.assertNotIn("准备求助。", prompt)
+
     def test_li_dahai_old_phone_is_unreachable(self):
         npc = LiDahaiNPC({"id": "li_dahai"}, llm=FakeLLM())
         resp = npc.respond(NpcContext(
@@ -131,14 +171,90 @@ class SandboxSmokeTests(unittest.TestCase):
             env = Environment.from_case_file(CASE_PATH)
             worker = SimulatedWorker()
             advisor = AnxinAdvisor()
-            result = EpisodeRunner(env, worker, advisor, max_turns=3, verbose=False).run()
+            result = EpisodeRunner(env, worker, advisor, max_turns=4, verbose=False).run()
 
         self.assertIsNotNone(result.final_judgment)
         self.assertIn("E006", env.state.evidence_pool)
         self.assertIn("E009", env.state.evidence_pool)
+        self.assertIsNotNone(env.state.final_submission)
+        self.assertEqual(env.state.final_submission.channel_id, "CH_ARBITRATION")
         self.assertTrue(env.state.flags["limit_order_issued"])
         self.assertEqual(env.state.procedural_stage, ProceduralStage.ARBITRATION_FILED)
         self.assertEqual(len(env.state.npc_interactions), 1)
+
+    def test_final_submission_give_up_channel(self):
+        with patch("llm.client.LLMClient.from_env", return_value=FakeLLM()):
+            env = Environment.from_case_file(CASE_PATH)
+        env.reset()
+        from environment.actions import make_final_action
+
+        _, action_result = env.step(make_final_action(
+            channel_id="CH_GIVE_UP",
+            channel_name="放弃维权",
+            advisor_reasoning="太难了",
+            drafted_documents=[],
+            evidence_ids=[],
+            respondents=[],
+        ))
+
+        self.assertTrue(action_result.success)
+        self.assertTrue(env.state.is_terminal)
+        self.assertEqual(env.state.procedural_stage, ProceduralStage.ABANDONED)
+
+    def test_judge_bad_json_falls_back_to_rule_award(self):
+        class BadJudgeLLM(FakeLLM):
+            def chat_json(self, messages, *, temperature=0.3, max_tokens=2048, purpose=""):
+                if purpose == "judge":
+                    raise ValueError("Unterminated string starting at: line 20 column 20")
+                return super().chat_json(messages, temperature=temperature, purpose=purpose)
+
+        with patch("llm.client.LLMClient.from_env", return_value=FakeLLM()):
+            env = Environment.from_case_file(CASE_PATH)
+        env.reset()
+        env.step(Action("A001"))
+        env.step(Action("A006", {"target_company": "宏基建设集团股份有限公司"}))
+        from environment.actions import make_final_action
+        env.step(make_final_action(
+            channel_id="CH_INSPECTION_ONLY",
+            channel_name="行政监察",
+            advisor_reasoning="先走监察",
+            drafted_documents=[],
+            evidence_ids=["E001", "E002", "E003", "E005", "E006"],
+            respondents=["成都恒达劳务有限公司", "宏基建设集团股份有限公司"],
+        ))
+
+        from judge.judgment_engine import JudgmentEngine
+        judgment = JudgmentEngine(llm=BadJudgeLLM()).adjudicate(
+            env.state,
+            env.case_data,
+            advisor_name="anxin",
+            channel_id="CH_INSPECTION_ONLY",
+            final_submission=env.state.final_submission,
+        )
+
+        self.assertEqual(judgment.monetary_award.principal, 76600)
+        self.assertGreater(judgment.monetary_award.total, 0)
+        self.assertIn("规则兜底", " ".join(judgment.critical_misses))
+
+    def test_fastapi_session_contract_with_mock_llm(self):
+        from fastapi.testclient import TestClient
+        from api.server import app
+
+        with patch("llm.client.LLMClient.from_env", return_value=FakeLLM()):
+            client = TestClient(app)
+            start = client.post("/sessions", json={"advisor_type": "anxin", "max_turns": 1})
+            self.assertEqual(start.status_code, 200)
+            sid = start.json()["session_id"]
+
+            turn = client.post(f"/sessions/{sid}/turn")
+            self.assertEqual(turn.status_code, 200)
+            self.assertTrue(turn.json()["is_final_turn"])
+
+            final = client.post(f"/sessions/{sid}/finalize")
+            self.assertEqual(final.status_code, 200)
+            body = final.json()
+            self.assertEqual(body["channel_id"], "CH_ARBITRATION")
+            self.assertIn("judgment", body)
 
 
 if __name__ == "__main__":

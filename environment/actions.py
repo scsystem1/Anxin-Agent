@@ -62,6 +62,31 @@ class ActionResult:
     error: str | None = None
 
 
+FINAL_ACTION_ID = "A_FINAL"
+
+
+def make_final_action(
+    channel_id: str,
+    channel_name: str,
+    advisor_reasoning: str,
+    drafted_documents: list[dict],
+    evidence_ids: list[str],
+    respondents: list[str],
+) -> Action:
+    """Build the structured final-channel submission action."""
+    return Action(
+        action_id=FINAL_ACTION_ID,
+        parameters={
+            "channel_id": channel_id,
+            "channel_name": channel_name,
+            "advisor_reasoning": advisor_reasoning,
+            "drafted_documents": drafted_documents,
+            "evidence_ids_submitted": evidence_ids,
+            "respondents": respondents,
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helpers for action spec loading and precondition evaluation
 # ---------------------------------------------------------------------------

@@ -66,7 +66,8 @@
     ],
     "applicable_laws": [
       "《保障农民工工资支付条例》第30条 - 总包先行清偿",
-      "《保障农民工工资支付条例》第31条 - 违法分包连带责任",
+      "《保障农民工工资支付条例》第36条 - 违法发包、分包给个人或无资质单位导致欠薪的清偿责任",
+      "《保障农民工工资支付条例》第31条 - 工程建设领域总包代发工资制度",
       "《劳动合同法》第85条 - 加付赔偿金（限期不支付50%-100%）",
       "《关于确立劳动关系有关事项的通知》第2条 - 无书面合同的事实劳动关系认定",
       "《劳动争议解释（一）》第49条 - 财产保全免担保",
@@ -204,7 +205,7 @@
         "trigger_actions": ["A007"],
         "difficulty": "medium",
         "evidentiary_strength": 3,
-        "proves": "违法分包给无资质个人，连带责任依据"
+        "proves": "违法分包给无资质个人，适用《保障农民工工资支付条例》第36条的责任依据"
       },
       {
         "id": "E010",
@@ -230,8 +231,8 @@
         "id": "T001",
         "presented_as": "恒达\"已付李大海\"的汇款凭证",
         "looks_like": "恒达试图以此完全免责",
-        "actual_legal_position": "付款给包工头不免除分包方违法分包的连带责任",
-        "agent_should": "明确指出连带责任不因中间支付而切断"
+        "actual_legal_position": "付款给包工头不免除违法分包方依据《保障农民工工资支付条例》第36条承担的清偿责任",
+        "agent_should": "明确指出违法分包责任不因中间支付而切断"
       },
       {
         "id": "T002",
@@ -293,7 +294,7 @@
         "\"我们遵守了合同，你应该去告李大海\""
       ],
       "weak_points_agent_can_exploit": [
-        "恒达将工程违法转包给无资质个人 → 必须承担连带责任",
+        "恒达将工程违法转包给无资质个人 → 依据《保障农民工工资支付条例》第36条承担清偿责任",
         "\"已付清包工头\"不等于免责",
         "恒达有义务保留并配合提供工资台账"
       ],
@@ -526,6 +527,53 @@
       }
     },
     {
+      "id": "A017",
+      "name": "拨打李大海旧电话",
+      "category": "communication",
+      "preconditions": [],
+      "duration_days": 1,
+      "parameters_required": ["contact_method"],
+      "effects": {
+        "triggers_npc": "li_dahai"
+      },
+      "narration": "赵建国照着手机通讯录拨打李大海旧号码，尝试直接催要工资"
+    },
+    {
+      "id": "A018",
+      "name": "联系宏基项目经理张国华",
+      "category": "communication",
+      "preconditions": [],
+      "duration_days": 1,
+      "parameters_required": ["message"],
+      "effects": {
+        "triggers_npc": "zhang_guohua"
+      },
+      "narration": "赵建国通过工地公示牌上的总机联系宏基项目部，要求张国华说明工资责任"
+    },
+    {
+      "id": "A019",
+      "name": "补拍并标注工地公示牌",
+      "category": "evidence",
+      "preconditions": [],
+      "duration_days": 1,
+      "effects": {
+        "evidence_pool_add": ["E005"],
+        "state_changes": {"已标注总包分包信息": true}
+      },
+      "narration": "赵建国把工地公示牌重新拍清楚，圈出宏基建设和恒达劳务的名称"
+    },
+    {
+      "id": "A_FINAL",
+      "name": "最终渠道提交",
+      "category": "terminal",
+      "preconditions": [],
+      "duration_days": 1,
+      "parameters_required": ["channel_id", "respondents", "evidence_ids_submitted", "drafted_documents"],
+      "effects": {
+        "final_submission": true
+      }
+    },
+    {
       "id": "A099",
       "name": "放弃维权",
       "category": "terminal",
@@ -587,6 +635,146 @@
       "未告知总包先行清偿、未告知财产保全免担保、未告知法援"
     ],
     "predicted_outcome": "陷入恒达-李大海推诿循环，工人可能因此放弃或低价和解"
+  },
+
+  "legal_knowledge_pack": {
+    "sources": [
+      {
+        "id": "LAW_WAGE_PAYMENT_ART30",
+        "title": "《保障农民工工资支付条例》第30条",
+        "rule": "分包单位拖欠农民工工资的，由施工总承包单位先行清偿，再依法进行追偿；工程建设项目转包导致拖欠农民工工资的，由施工总承包单位先行清偿。",
+        "applies_to": ["general_contractor", "inspector", "arbitrator", "judge"]
+      },
+      {
+        "id": "LAW_WAGE_PAYMENT_ART31",
+        "title": "《保障农民工工资支付条例》第31条",
+        "rule": "工程建设领域推行分包单位农民工工资委托施工总承包单位代发制度。",
+        "applies_to": ["general_contractor", "inspector", "arbitrator", "judge"]
+      },
+      {
+        "id": "LAW_WAGE_PAYMENT_ART36",
+        "title": "《保障农民工工资支付条例》第36条",
+        "rule": "建设单位或施工总承包单位将建设工程发包或者分包给个人或者不具备合法经营资格的单位，导致拖欠农民工工资的，由建设单位或者施工总承包单位清偿。",
+        "applies_to": ["subcontractor", "general_contractor", "arbitrator", "judge"]
+      },
+      {
+        "id": "LAW_LABOR_CONTRACT_ART85",
+        "title": "《劳动合同法》第85条",
+        "rule": "未及时足额支付劳动报酬，经劳动行政部门责令限期支付后逾期不支付的，责令按应付金额百分之五十以上百分之一百以下的标准向劳动者加付赔偿金。",
+        "applies_to": ["inspector", "arbitrator", "judge"]
+      },
+      {
+        "id": "LAW_LABOR_DISPUTE_SOL_ART27",
+        "title": "《劳动争议调解仲裁法》第27条",
+        "rule": "劳动关系存续期间因拖欠劳动报酬发生争议的，劳动者申请仲裁不受一年仲裁时效限制；劳动关系终止的，应自终止之日起一年内提出。",
+        "applies_to": ["arbitrator", "judge"]
+      },
+      {
+        "id": "LAW_LABOR_JIEXI1_ART15",
+        "title": "《最高人民法院劳动争议司法解释（一）》第15条",
+        "rule": "劳动者以用人单位的工资欠条为证据直接提起诉讼，诉讼请求不涉及劳动关系其他争议的，按照普通民事纠纷受理。",
+        "applies_to": ["judge"]
+      },
+      {
+        "id": "LAW_LABOR_JIEXI1_ART49",
+        "title": "《最高人民法院劳动争议司法解释（一）》第49条",
+        "rule": "劳动者申请财产保全，经审查确有经济困难或有证据证明用人单位存在欠薪逃匿可能的，应减轻或免除担保义务。",
+        "applies_to": ["arbitrator", "judge"]
+      },
+      {
+        "id": "LAW_CRIMINAL_ART276_1",
+        "title": "《刑法》第276条之一",
+        "rule": "以转移财产、逃匿等方法逃避支付劳动者劳动报酬，数额较大，经政府有关部门责令支付仍不支付的，可能构成拒不支付劳动报酬罪。",
+        "applies_to": ["police", "judge"]
+      }
+    ]
+  },
+
+  "final_submission_actions": {
+    "description": "最终轮由 advisor 推荐渠道，worker 整理证据和文书后提交给环境裁决。",
+    "channels": [
+      {
+        "id": "CH_INSPECTION_ONLY",
+        "name": "行政监察",
+        "description": "继续走劳动监察，适合证据一般、希望快速形成行政压力的路径。",
+        "judge_npc": "chen_wei",
+        "preconditions": ["procedural_stage>=labor_inspection"],
+        "outcome_range": {"min_ratio": 0.5, "max_ratio": 1.0, "typical_days": 45},
+        "background_key": "inspection"
+      },
+      {
+        "id": "CH_ARBITRATION",
+        "name": "劳动仲裁",
+        "description": "提交仲裁申请，可同时申请财产保全，适合证据池较完整时追讨本金、赔偿金和利息。",
+        "judge_npc": "arbitrator",
+        "preconditions": ["evidence_pool_size>=3"],
+        "outcome_range": {"min_ratio": 0.8, "max_ratio": 1.75, "typical_days": 60},
+        "background_key": "arbitration"
+      },
+      {
+        "id": "CH_DIRECT_LAWSUIT",
+        "name": "持欠条直接起诉",
+        "description": "凭工资欠条向法院直接起诉，适合诉求只围绕拖欠工资的情形。",
+        "judge_npc": "judge",
+        "preconditions": ["E001 in evidence_pool"],
+        "outcome_range": {"min_ratio": 0.8, "max_ratio": 1.6, "typical_days": 90},
+        "background_key": "court"
+      },
+      {
+        "id": "CH_CRIMINAL_CIVIL",
+        "name": "刑事+民事并行",
+        "description": "在仲裁或诉讼追薪同时对李大海报案，适合已有限期整改且逾期未支付的恶意欠薪情形。",
+        "judge_npc": "judge",
+        "preconditions": ["state.limit_order_issued == true"],
+        "outcome_range": {"min_ratio": 0.9, "max_ratio": 1.8, "typical_days": 120},
+        "background_key": "court"
+      },
+      {
+        "id": "CH_GIVE_UP",
+        "name": "放弃维权",
+        "description": "不再提交任何材料，欠薪无法追回。",
+        "judge_npc": null,
+        "preconditions": [],
+        "outcome_range": {"min_ratio": 0.0, "max_ratio": 0.0, "typical_days": 0},
+        "background_key": "giveup"
+      }
+    ]
+  },
+
+  "judge_npcs": {
+    "arbitrator": {
+      "id": "arbitrator",
+      "display_name": "仲裁员（双流区劳动人事争议仲裁委员会）",
+      "type": "judge",
+      "jurisdiction": "劳动仲裁"
+    },
+    "judge": {
+      "id": "judge",
+      "display_name": "法官（双流区人民法院）",
+      "type": "judge",
+      "jurisdiction": "民事/刑事"
+    }
+  },
+
+  "scoring_rubric": {
+    "description": "用于前端展示 advisor 路径质量的六维评分。",
+    "dimensions": [
+      {"id": "primary_respondent", "name": "主体认定", "weight": 0.25},
+      {"id": "evidence_quality", "name": "证据质量", "weight": 0.20},
+      {"id": "procedure_efficiency", "name": "程序效率", "weight": 0.15},
+      {"id": "recovery_ratio", "name": "追回比例", "weight": 0.25},
+      {"id": "key_tools_used", "name": "关键工具", "weight": 0.10},
+      {"id": "trap_avoidance", "name": "陷阱规避", "weight": 0.05}
+    ]
+  },
+
+  "ui_assets": {
+    "backgrounds": {
+      "inspection": "linear-gradient(135deg, #123d4f, #e1f1f3)",
+      "arbitration": "linear-gradient(135deg, #353b5b, #eef0ff)",
+      "court": "linear-gradient(135deg, #4a1f20, #fff3e0)",
+      "giveup": "linear-gradient(135deg, #3a3a3a, #e9e9e9)"
+    }
   },
 
   "terminal_conditions": {

@@ -28,13 +28,19 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 @dataclass
 class LLMConfig:
     api_key: str
     base_url: str        # e.g. "https://api.openai.com/v1" or 豆包 endpoint
     model: str           # e.g. "gpt-4o-mini" or "doubao-pro-32k"
-    timeout_s: int = 60
+    timeout_s: int = 180
 
 
 class LLMClient:
@@ -137,7 +143,7 @@ class LLMClient:
     def _should_skip_response_format(self) -> bool:
         """Some OpenAI-compatible gateways reject response_format."""
         base_url = self.config.base_url.lower()
-        unsupported_markers = ("ark", "deepseek", "dashscope", "volces", "volcengine")
+        unsupported_markers = ("ark", "dashscope", "volces", "volcengine")
         return any(marker in base_url for marker in unsupported_markers)
 
     def chat_json(
@@ -145,6 +151,7 @@ class LLMClient:
         messages: list[dict[str, str]],
         *,
         temperature: float = 0.3,
+        max_tokens: int = 2048,
         purpose: str = "",
     ) -> dict[str, Any]:
         """
@@ -153,6 +160,7 @@ class LLMClient:
         raw = self.chat(
             messages=messages,
             temperature=temperature,
+            max_tokens=max_tokens,
             response_format="json",
             purpose=purpose,
         )

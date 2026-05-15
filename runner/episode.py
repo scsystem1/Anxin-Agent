@@ -46,6 +46,11 @@ class TurnRecord:
     action_narration: str
     action_success: bool
     new_evidence_ids: list[str] = field(default_factory=list)
+    action_narration_full: str = ""
+    npc_interactions: list[dict[str, str]] = field(default_factory=list)
+    current_evidence_pool: list[dict[str, Any]] = field(default_factory=list)
+    procedural_stage: str = ""
+    is_final_turn: bool = False
 
 
 @dataclass
@@ -106,13 +111,35 @@ class EpisodeRunner:
             conversation_history.append({"role": "worker", "content": request_obj.text})
             conversation_history.append({"role": "advisor", "content": response.text})
 
-            # Step 4: worker chooses action
-            available = self.env.available_actions()
-            choice = self.worker.choose_action(
-                advice_text=response.text,
-                available_actions=available,
-                advisor_hints=response.suggested_action_hints,
-            )
+            is_last_turn = turn_idx == self.max_turns - 1
+            if is_last_turn:
+                from environment.actions import make_final_action
+
+                channels = self.env.case_data.get("final_submission_actions", {}).get("channels", [])
+                submission = self.worker.formulate_final_submission(
+                    advice_text=response.text,
+                    evidence_summary=self.env.state.evidence_summary(),
+                    channels=channels,
+                )
+                choice = WorkerActionChoice(
+                    action=make_final_action(
+                        channel_id=submission.get("channel_id", "CH_GIVE_UP"),
+                        channel_name=submission.get("channel_name", "放弃维权"),
+                        advisor_reasoning=submission.get("advisor_reasoning", ""),
+                        drafted_documents=submission.get("drafted_documents", []),
+                        evidence_ids=submission.get("evidence_ids_submitted", list(self.env.state.evidence_pool.keys())),
+                        respondents=submission.get("respondents", []),
+                    ),
+                    reasoning=submission.get("advisor_reasoning", ""),
+                )
+            else:
+                # Step 4: worker chooses action
+                available = self.env.available_actions()
+                choice = self.worker.choose_action(
+                    advice_text=response.text,
+                    available_actions=available,
+                    advisor_hints=response.suggested_action_hints,
+                )
             self._log(
                 f"[Worker → Env] {choice.action.action_id} "
                 f"params={choice.action.parameters} :: {choice.reasoning}"
@@ -138,11 +165,31 @@ class EpisodeRunner:
                 action_narration=action_result.narration,
                 action_success=action_result.success,
                 new_evidence_ids=list(action_result.new_evidence_ids),
+                action_narration_full=action_result.narration,
+                npc_interactions=[
+                    {"npc_id": npc_id, "text": text}
+                    for npc_id, text in action_result.npc_interactions
+                ],
+                current_evidence_pool=[
+                    {
+                        "id": e.id,
+                        "name": e.name,
+                        "details": e.details,
+                        "strength": e.evidentiary_strength,
+                        "proves": e.proves,
+                        "obtained_at_day": e.obtained_at_day,
+                    }
+                    for e in self.env.state.evidence_pool.values()
+                ],
+                procedural_stage=self.env.state.procedural_stage.value,
+                is_final_turn=is_last_turn,
             ))
+            if is_last_turn:
+                break
 
         # Adjudicate
         self._log(f"\n══ Adjudicating {self.advisor.name} ══")
-        judgment = self.env.adjudicate()
+        judgment = self.env.finalize()
         # Patch the advisor name in (env doesn't know it)
         judgment.advisor_name = self.advisor.name
 

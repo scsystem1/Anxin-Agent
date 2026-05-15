@@ -93,6 +93,22 @@ class FinancialState:
 
 
 @dataclass
+class FinalSubmission:
+    """
+    The advisor-guided final submission at the end of an episode.
+
+    This is intentionally structured: the environment and judge should not
+    infer the chosen legal route from free-form prose.
+    """
+    channel_id: str
+    channel_name: str
+    advisor_reasoning: str
+    drafted_documents: list[dict[str, Any]]
+    evidence_ids_submitted: list[str]
+    respondents: list[str]
+
+
+@dataclass
 class CaseState:
     """
     The complete state of the case at the current moment.
@@ -146,6 +162,9 @@ class CaseState:
     # --- adversary positions (tracked separately, used by judgment engine) ---
     respondent_defenses: dict[str, list[str]] = field(default_factory=dict)
     # ↑ {"宏基建设": ["已付清恒达工程款", "无直接合同关系"], ...}
+
+    # --- final submission ---
+    final_submission: FinalSubmission | None = None
 
     # --- terminal ---
     is_terminal: bool = False

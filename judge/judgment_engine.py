@@ -108,14 +108,37 @@ JUDGE_SYSTEM_PROMPT = """\
    procedural record（证据池、当事人提出的抗辩、走过的程序）。
 2. 如果原告未将某主体列为被告/被申请人，即使事实上该主体应当承担责任，
    你也不能在判决中令其承担——但你可以在 critical_misses 中明确指出。
-3. 严格区分先行清偿责任（《保障农民工工资支付条例》第30条）和连带责任
-   （第31条）。前者只追总包，后者追违法分包方。
+3. 严格引用法条：《保障农民工工资支付条例》第30条是施工总承包单位先行清偿；
+   第36条适用于违法发包、分包给个人或无资质单位导致欠薪；第31条是总包代发
+   工资制度，不要把第31条写成违法分包连带责任依据。
 4. 加付赔偿金（《劳动合同法》第85条）只在劳动监察下达限期整改令、相对方
    逾期不支付的情况下触发。
 5. 对放弃维权（A099）、超时（>365天）、走错程序的情况，分别给出对应的
    裁判结论。
 
 输出格式：严格 JSON，schema 见下文。不要有 markdown 代码块。
+"""
+
+
+INSPECTOR_JUDGE_PROMPT = JUDGE_SYSTEM_PROMPT + """\
+
+你当前代表劳动保障监察渠道出具处理意见。行政监察可责令限期支付并形成行政压力，
+但通常不直接裁决民事利息和加付赔偿金；如已下达限期整改且逾期不支付，应提示可
+申请仲裁/诉讼和刑事移送。
+"""
+
+
+ARBITRATOR_JUDGE_PROMPT = JUDGE_SYSTEM_PROMPT + """\
+
+你当前代表劳动人事争议仲裁渠道作出仲裁裁决。重点审查申请人提交证据、被申请人
+范围、是否申请财产保全，以及是否满足劳动合同法第85条加付赔偿金条件。
+"""
+
+
+COURT_JUDGE_PROMPT = JUDGE_SYSTEM_PROMPT + """\
+
+你当前代表人民法院作出裁判。若工人持工资欠条直接起诉且诉求只涉及拖欠劳动报酬，
+可按普通民事纠纷处理；刑事报案部分只在文书中注明另案处理。
 """
 
 
@@ -146,7 +169,13 @@ JUDGE_OUTPUT_SCHEMA = """\
 """
 
 
-def _build_judge_user_prompt(state: CaseState, case_data: dict, advisor_name: str) -> str:
+def _build_judge_user_prompt(
+    state: CaseState,
+    case_data: dict,
+    advisor_name: str,
+    channel_id: str | None = None,
+    final_submission=None,
+) -> str:
     """Assemble the user prompt with all the facts the judge needs."""
     gt = case_data["ground_truth"]
     fin = state.financial
@@ -168,7 +197,12 @@ def _build_judge_user_prompt(state: CaseState, case_data: dict, advisor_name: st
         for party, defs in state.respondent_defenses.items()
     ) or "  （无对方明确抗辩记录）"
 
-    return f"""\
+    legal_pack = "\n".join(
+        f"- {s.get('title')}: {s.get('rule')}"
+        for s in case_data.get("legal_knowledge_pack", {}).get("sources", [])
+    ) or "（无）"
+
+    prompt = f"""\
 # 案件基本信息
 案号：{state.case_id}
 原告：{state.worker_name}（{state.worker_id_card}）
@@ -176,13 +210,17 @@ def _build_judge_user_prompt(state: CaseState, case_data: dict, advisor_name: st
 模拟运行天数：{state.current_day} 天
 程序终止阶段：{state.procedural_stage.value}
 终止原因：{state.terminal_reason.value if state.terminal_reason else '未终止'}
+最终渠道：{channel_id or '（未指定）'}
 
 # Ground Truth（你作为法官知道的客观真相）
 - 总包：{gt['general_contractor']['name']}（依法负有先行清偿责任）
-- 分包：{gt['subcontractor']['name']}（违法分包，应承担连带责任。已于2023-12-05向李大海支付全部劳务款 1,427,000 元）
+- 分包：{gt['subcontractor']['name']}（违法分包给无资质个人，应按第36条相关规则承担清偿责任。已于2023-12-05向李大海支付全部劳务款 1,427,000 元）
 - 包工头：{gt['labor_contractor']['name']}（已收款后逃匿）
 - 欠薪本金：{fin.total_owed} 元
 - 工人持有手写结算单（E001），是核心证据
+
+# 可引用法律知识（只使用与本渠道相关者）
+{legal_pack}
 
 # 程序记录（仅以下进入了诉讼/裁决记录）
 ## 已固定的证据池
@@ -218,6 +256,19 @@ def _build_judge_user_prompt(state: CaseState, case_data: dict, advisor_name: st
 # 输出 schema
 {JUDGE_OUTPUT_SCHEMA}
 """
+    if final_submission:
+        prompt += f"""
+
+# 最终提交信息
+渠道：{final_submission.channel_name}（{final_submission.channel_id}）
+Advisor推荐理由：{final_submission.advisor_reasoning}
+被申请人/被告：{', '.join(final_submission.respondents) if final_submission.respondents else '（未列明）'}
+提交证据：{', '.join(final_submission.evidence_ids_submitted)}
+起草文书：
+"""
+        for doc in final_submission.drafted_documents:
+            prompt += f"【{doc.get('doc_type', '')}】\n{str(doc.get('content', ''))[:800]}\n"
+    return prompt
 
 
 # ---------------------------------------------------------------------------
@@ -235,11 +286,26 @@ class JudgmentEngine:
         state: CaseState,
         case_data: dict,
         advisor_name: str = "unknown",
+        channel_id: str | None = None,
+        final_submission=None,
     ) -> Judgment:
         """Produce a Judgment from the terminal state."""
-        user_prompt = _build_judge_user_prompt(state, case_data, advisor_name)
+        user_prompt = _build_judge_user_prompt(
+            state,
+            case_data,
+            advisor_name,
+            channel_id=channel_id,
+            final_submission=final_submission,
+        )
+        channel_prompts = {
+            "CH_INSPECTION_ONLY": INSPECTOR_JUDGE_PROMPT,
+            "CH_ARBITRATION": ARBITRATOR_JUDGE_PROMPT,
+            "CH_DIRECT_LAWSUIT": COURT_JUDGE_PROMPT,
+            "CH_CRIMINAL_CIVIL": COURT_JUDGE_PROMPT,
+        }
+        system_prompt = channel_prompts.get(channel_id or "", JUDGE_SYSTEM_PROMPT)
         messages = [
-            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -249,20 +315,19 @@ class JudgmentEngine:
             parsed = self.llm.chat_json(
                 messages=messages,
                 temperature=0.2,
+                max_tokens=4096,
                 purpose="judge",
             )
         except Exception as e:
-            return Judgment(
-                case_id=state.case_id,
-                advisor_name=advisor_name,
-                terminal_reason=(state.terminal_reason.value if state.terminal_reason else "unknown"),
-                days_elapsed=state.current_day,
-                procedural_stage_at_end=state.procedural_stage.value,
-                primary_respondent=None,
-                summary_in_plain_chinese=f"（判决引擎调用失败：{e}）",
-                formal_judgment_text="",
-                judge_raw_output=str(e),
+            parsed = self._fallback_parsed_judgment(
+                state=state,
+                case_data=case_data,
+                channel_id=channel_id,
+                final_submission=final_submission,
+                error=e,
             )
+
+        self._enforce_channel_bounds(parsed, state, case_data, channel_id, final_submission)
 
         # Hydrate the structured object
         award_data = parsed.get("monetary_award", {}) or {}
@@ -294,6 +359,168 @@ class JudgmentEngine:
             critical_misses=parsed.get("critical_misses", []),
             judge_raw_output=json.dumps(parsed, ensure_ascii=False, indent=2),
         )
+
+    def _enforce_channel_bounds(
+        self,
+        parsed: dict[str, Any],
+        state: CaseState,
+        case_data: dict,
+        channel_id: str | None,
+        final_submission,
+    ) -> None:
+        """Clamp LLM output to configured route and party boundaries."""
+        if final_submission and final_submission.respondents:
+            allowed = [str(r) for r in final_submission.respondents]
+            liabilities = []
+            for lf in parsed.get("liability_findings", []) or []:
+                party = str(lf.get("party", ""))
+                if any(a in party or party in a for a in allowed):
+                    liabilities.append(lf)
+            parsed["liability_findings"] = liabilities
+            primary = str(parsed.get("primary_respondent") or "")
+            if primary and not any(a in primary or primary in a for a in allowed):
+                parsed["primary_respondent"] = allowed[0]
+
+        channel = None
+        for c in case_data.get("final_submission_actions", {}).get("channels", []):
+            if c.get("id") == channel_id:
+                channel = c
+                break
+        max_ratio = (channel or {}).get("outcome_range", {}).get("max_ratio", 1.0)
+        max_total = int(case_data["financial"]["total_owed"] * float(max_ratio))
+        award = parsed.setdefault("monetary_award", {})
+        if channel_id != "CH_GIVE_UP" and final_submission:
+            submitted = set(final_submission.evidence_ids_submitted or [])
+            respondents = " ".join(final_submission.respondents or [])
+            has_wage_basis = bool({"E001", "E002", "E003"} & submitted)
+            has_liable_party = "宏基" in respondents or "恒达" in respondents
+            if has_wage_basis and has_liable_party and int(award.get("principal", 0) or 0) <= 0:
+                award["principal"] = int(case_data["financial"]["total_owed"])
+        total = int(award.get("total", 0) or 0)
+        if channel_id == "CH_INSPECTION_ONLY":
+            award["additional_compensation"] = 0
+            award["interest"] = 0
+        if total > max_total:
+            scale = max_total / total if total else 0
+            for key in ("principal", "additional_compensation", "interest", "legal_costs"):
+                award[key] = int(int(award.get(key, 0) or 0) * scale)
+            award["total"] = sum(int(award.get(k, 0) or 0) for k in ("principal", "additional_compensation", "interest")) - int(award.get("legal_costs", 0) or 0)
+        else:
+            award["total"] = sum(int(award.get(k, 0) or 0) for k in ("principal", "additional_compensation", "interest")) - int(award.get("legal_costs", 0) or 0)
+
+    def _fallback_parsed_judgment(
+        self,
+        state: CaseState,
+        case_data: dict,
+        channel_id: str | None,
+        final_submission,
+        error: Exception,
+    ) -> dict[str, Any]:
+        """Deterministic fallback when the judge LLM emits invalid JSON."""
+        total_owed = int(case_data["financial"]["total_owed"])
+        submitted = set(
+            final_submission.evidence_ids_submitted
+            if final_submission else state.evidence_pool.keys()
+        )
+        respondents = list(final_submission.respondents) if final_submission else []
+        has_hongji = any("宏基" in r for r in respondents)
+        has_hengda = any("恒达" in r for r in respondents)
+        has_core_wage = bool({"E001", "E002", "E003"} & submitted)
+        has_registry = "E006" in submitted or state.has_evidence("E006")
+        has_limit_order = bool(state.flags.get("limit_order_issued"))
+        has_expired = bool(state.flags.get("limit_order_expired_unpaid"))
+
+        principal = 0
+        additional = 0
+        interest = 0
+        if channel_id == "CH_GIVE_UP":
+            summary = "赵建国未进入正式程序，欠薪暂未追回。"
+        elif channel_id == "CH_INSPECTION_ONLY":
+            if has_core_wage and (has_hongji or has_hengda):
+                principal = total_owed
+            summary = (
+                "劳动监察渠道已受理。现有欠条、转账/催讨记录和实名制台账足以形成行政处理压力，"
+                "可责令相关单位限期支付欠薪本金；加付赔偿金、利息仍需通过仲裁或诉讼进一步主张。"
+            )
+        else:
+            if has_core_wage and (has_hongji or has_hengda):
+                principal = total_owed
+                interest = 1500 if channel_id in ("CH_ARBITRATION", "CH_DIRECT_LAWSUIT", "CH_CRIMINAL_CIVIL") else 0
+                if has_limit_order and has_expired:
+                    additional = int(total_owed * 0.5)
+            summary = (
+                "根据已提交证据，欠薪本金可以获得支持。若宏基、恒达均被列为被申请人/被告，"
+                "可分别围绕总包先行清偿和违法分包责任进行处理。"
+            )
+
+        fact_findings = []
+        if "E001" in submitted:
+            fact_findings.append({
+                "fact": "李大海向赵建国出具手写工资结算单，确认欠付工资76600元。",
+                "supporting_evidence_ids": ["E001"],
+                "found_established": True,
+                "reasoning": "手写结算单直接载明欠薪金额。"
+            })
+        if "E006" in submitted or has_registry:
+            fact_findings.append({
+                "fact": "赵建国在天骄名苑项目实名制台账中登记在册。",
+                "supporting_evidence_ids": ["E006"],
+                "found_established": True,
+                "reasoning": "实名制台账可证明其在项目务工事实。"
+            })
+
+        liability_findings = []
+        if has_hongji:
+            liability_findings.append({
+                "party": "宏基建设集团股份有限公司",
+                "role": "施工总承包单位",
+                "liable": principal > 0,
+                "liability_type": "先行清偿" if principal > 0 else "证据不足",
+                "legal_basis": ["《保障农民工工资支付条例》第30条"],
+                "reasoning": "分包单位拖欠农民工工资时，施工总承包单位依法先行清偿。"
+            })
+        if has_hengda:
+            liability_findings.append({
+                "party": "成都恒达劳务有限公司",
+                "role": "劳务分包单位",
+                "liable": principal > 0,
+                "liability_type": "违法分包清偿责任" if principal > 0 else "证据不足",
+                "legal_basis": ["《保障农民工工资支付条例》第36条"],
+                "reasoning": "违法分包给无资质个人导致欠薪，不能以已向包工头付款对抗农民工。"
+            })
+
+        misses = [f"判决LLM返回的JSON格式无法解析，已启用规则兜底：{error}"]
+        if not has_hongji:
+            misses.append("未将宏基建设列为责任主体，可能错过总包先行清偿。")
+        if not has_registry:
+            misses.append("未提交实名制台账E006，项目用工事实证明力下降。")
+
+        total = principal + additional + interest
+        return {
+            "primary_respondent": (
+                "宏基建设集团股份有限公司" if has_hongji
+                else ("成都恒达劳务有限公司" if has_hengda else None)
+            ),
+            "fact_findings": fact_findings,
+            "liability_findings": liability_findings,
+            "monetary_award": {
+                "principal": principal,
+                "additional_compensation": additional,
+                "interest": interest,
+                "legal_costs": 0,
+                "total": total,
+            },
+            "summary_in_plain_chinese": summary,
+            "formal_judgment_text": (
+                "本机关/本院根据已提交材料认为：赵建国提交的工资结算单、转账或催讨记录、"
+                "项目主体信息等证据，可以证明其在案涉项目务工及被欠付工资的基本事实。"
+                f"处理结果：支持欠薪本金{principal}元"
+                + (f"，加付赔偿金{additional}元" if additional else "")
+                + (f"，利息{interest}元" if interest else "")
+                + "。"
+            ),
+            "critical_misses": misses,
+        }
 
 
 def judgment_to_markdown(j: Judgment) -> str:

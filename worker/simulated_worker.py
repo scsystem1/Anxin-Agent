@@ -22,6 +22,7 @@ it models how real low-literacy migrant workers actually behave.
 
 from __future__ import annotations
 import sys
+import re
 from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 
@@ -73,6 +74,31 @@ REQUEST_FORMULATION_PROMPT = """\
 """
 
 
+INCREMENTAL_REQUEST_FORMULATION_PROMPT = """\
+{persona}
+
+# 你和军师已经聊过前面的案情
+军师能看到之前的聊天记录，所以你这次不要重复最开始的欠薪背景、欠条、李大海跑路这些旧话。
+
+# 刚刚发生的新进展
+今天是模拟时间第 {day} 天（{date}）。
+{latest_event}
+
+# 你最近做过的动作
+{action_history_summary}
+
+# 你这次要发给军师的话
+只用赵建国的白话，说清楚“刚刚发生了什么 / 对方怎么回 / 我现在卡在哪里”，然后问下一步。
+要求：
+- 只说增量信息，不要从头复述案情
+- 如果刚拿到新证据，就点名说拿到了什么
+- 如果刚和NPC沟通，就说对方具体怎么推诿或答复
+- 1到3句话即可
+
+直接输出你要发的消息，不要任何前后缀。
+"""
+
+
 ACTION_SELECTION_PROMPT = """\
 {persona}
 
@@ -101,6 +127,41 @@ ACTION_SELECTION_PROMPT = """\
   "action_id": "Axxx",
   "parameters": {{...}},
   "reasoning_in_worker_voice": "我决定这么做是因为..."
+}}
+"""
+
+
+FINAL_SUBMISSION_PROMPT = """\
+{persona}
+
+# 军师刚才给你的最终建议
+\"\"\"
+{advice_text}
+\"\"\"
+
+# 你现在手头的证据
+{evidence_summary}
+
+# 可选的维权渠道
+{channels_menu}
+
+# 你的任务
+根据军师的建议，选择一个最终渠道，并整理要提交的证据、被申请人/被告和一份白话文书。
+如果军师没有说清楚，就选择最稳妥、你最能理解的渠道；不要编造自己没有的证据。
+
+输出严格 JSON（不要 markdown 代码块）：
+{{
+  "channel_id": "CH_ARBITRATION",
+  "channel_name": "劳动仲裁",
+  "advisor_reasoning": "我为什么听军师选这个渠道",
+  "respondents": ["宏基建设集团股份有限公司", "成都恒达劳务有限公司"],
+  "evidence_ids_submitted": ["E001", "E002"],
+  "drafted_documents": [
+    {{
+      "doc_type": "仲裁申请书",
+      "content": "申请人赵建国……请求支付拖欠工资……"
+    }}
+  ]
 }}
 """
 
@@ -148,13 +209,26 @@ class SimulatedWorker:
 
         Then call self.llm.chat(...) and wrap in WorkerRequest(text=response).
         """
-        user_prompt = REQUEST_FORMULATION_PROMPT.format(
-            persona=self.persona,
-            day=observation.day,
-            date=observation.date.isoformat(),
-            recent_events=observation.format_recent_events(),
-            action_history_summary=observation.format_action_history(last_n=3),
-        )
+        if observation.actions_taken_summary:
+            latest_event = (
+                f"- {observation.recent_events[-1]}"
+                if observation.recent_events else "- （暂无新进展）"
+            )
+            user_prompt = INCREMENTAL_REQUEST_FORMULATION_PROMPT.format(
+                persona=self.persona,
+                day=observation.day,
+                date=observation.date.isoformat(),
+                latest_event=latest_event,
+                action_history_summary=observation.format_action_history(last_n=3),
+            )
+        else:
+            user_prompt = REQUEST_FORMULATION_PROMPT.format(
+                persona=self.persona,
+                day=observation.day,
+                date=observation.date.isoformat(),
+                recent_events=observation.format_recent_events(),
+                action_history_summary=observation.format_action_history(last_n=3),
+            )
         text = self.llm.chat(
             messages=[{"role": "user", "content": user_prompt}],
             temperature=0.7,
@@ -209,11 +283,15 @@ class SimulatedWorker:
             advice_text=advice_text,
             action_menu=menu,
         )
-        parsed = self.llm.chat_json(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.4,
-            purpose="worker_action",
-        )
+        try:
+            parsed = self.llm.chat_json(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.4,
+                purpose="worker_action",
+            )
+        except Exception as e:
+            print(f"[Warn] worker_action LLM failed; using heuristic fallback: {e}", file=sys.stderr)
+            return self._fallback_action_choice(advice_text, available_actions, advisor_hints)
 
         action_id = parsed.get("action_id", "A001")
         valid_ids = {s.id for s in available_actions}
@@ -231,3 +309,106 @@ class SimulatedWorker:
             action=Action(action_id=action_id, parameters=parameters),
             reasoning=parsed.get("reasoning_in_worker_voice", ""),
         )
+
+    def _fallback_action_choice(
+        self,
+        advice_text: str,
+        available_actions: list[ActionSpec],
+        advisor_hints: list[str] | None = None,
+    ) -> WorkerActionChoice:
+        """Deterministic backup when the worker action LLM call fails."""
+        valid = {s.id for s in available_actions}
+        text = advice_text or ""
+
+        hint_text = "; ".join(advisor_hints or [])
+        for candidate in re.findall(r"A\d{3}", hint_text):
+            if candidate in valid:
+                return WorkerActionChoice(
+                    action=Action(candidate, parameters=self._default_params(candidate, text + hint_text)),
+                    reasoning="行动选择模型暂时失败，我按军师给的结构化提示照做。",
+                )
+
+        rules = [
+            (("财产保全", "冻结"), "A008"),
+            (("仲裁", "仲裁委"), "A007"),
+            (("劳动监察", "监察", "投诉"), "A006"),
+            (("法律援助", "12348", "法援"), "A009"),
+            (("法院", "起诉", "欠条"), "A013"),
+            (("宏基", "总包", "张国华"), "A018"),
+            (("恒达", "王主任", "王培"), "A011"),
+            (("李大海", "包工头", "电话"), "A017"),
+            (("公示牌", "拍照"), "A019"),
+            (("证据", "截图", "微信", "转账", "整理"), "A001"),
+        ]
+        for keywords, action_id in rules:
+            if action_id in valid and any(k in text for k in keywords):
+                return WorkerActionChoice(
+                    action=Action(action_id, parameters=self._default_params(action_id, text)),
+                    reasoning="行动选择模型暂时失败，我按军师话里的关键词选择最接近的行动。",
+                )
+
+        fallback_id = "A001" if "A001" in valid else (available_actions[0].id if available_actions else "A099")
+        return WorkerActionChoice(
+            action=Action(fallback_id, parameters=self._default_params(fallback_id, text)),
+            reasoning="行动选择模型暂时失败，我先做当前最稳妥的一步。",
+        )
+
+    def _default_params(self, action_id: str, text: str) -> dict[str, Any]:
+        if action_id == "A006":
+            target = "宏基建设集团股份有限公司" if "宏基" in text or "总包" in text else "成都恒达劳务有限公司"
+            return {"target_company": target}
+        if action_id == "A007":
+            respondents = ["宏基建设集团股份有限公司", "成都恒达劳务有限公司"]
+            if "李大海" in text:
+                respondents.append("李大海")
+            return {"respondents": respondents}
+        if action_id == "A011":
+            return {"message": "王主任，我是赵建国，李大海欠我工资，你们恒达是劳务公司，请帮我处理。"}
+        if action_id == "A017":
+            return {"contact_method": "old_phone", "message": "李哥，我是赵建国，你欠我的工资什么时候给？"}
+        if action_id == "A018":
+            return {"message": "张经理，我在天骄名苑干活被欠薪，公示牌上总包是宏基，请你们处理。"}
+        return {}
+
+    def formulate_final_submission(
+        self,
+        advice_text: str,
+        evidence_summary: str,
+        channels: list[dict],
+    ) -> dict[str, Any]:
+        """Turn the final advisor advice into structured submission params."""
+        channels_menu = "\n".join(
+            f"  [{c.get('id')}] {c.get('name')} - {c.get('description')}"
+            for c in channels
+        )
+        prompt = FINAL_SUBMISSION_PROMPT.format(
+            persona=self.persona,
+            advice_text=advice_text,
+            evidence_summary=evidence_summary,
+            channels_menu=channels_menu,
+        )
+        try:
+            parsed = self.llm.chat_json(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                purpose="worker_final_submission",
+            )
+        except Exception as e:
+            print(f"[Warn] worker_final_submission LLM failed; using fallback: {e}", file=sys.stderr)
+            evidence_ids = re.findall(r"E\d{3}", evidence_summary)
+            return {
+                "channel_id": "CH_ARBITRATION",
+                "channel_name": "劳动仲裁",
+                "advisor_reasoning": "最终提交生成模型暂时失败，我按已整理证据选择劳动仲裁。",
+                "respondents": ["宏基建设集团股份有限公司", "成都恒达劳务有限公司"],
+                "evidence_ids_submitted": evidence_ids,
+                "drafted_documents": [
+                    {
+                        "doc_type": "仲裁申请书",
+                        "content": "申请人赵建国，请求被申请人支付拖欠工资76600元，并依法承担相应责任。提交证据以现有证据清单为准。",
+                    }
+                ],
+            }
+        if not isinstance(parsed, dict):
+            return {}
+        return parsed

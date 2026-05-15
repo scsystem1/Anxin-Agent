@@ -73,9 +73,13 @@ class Environment:
     def __init__(self, case_data: dict):
         self.case_data = case_data
         self.state: CaseState = self._build_initial_state()
-        self.npc_manager = NpcManager(case_data["npcs"])
+        self.npc_manager = NpcManager(
+            case_data["npcs"],
+            legal_knowledge_pack=case_data.get("legal_knowledge_pack"),
+        )
         self.action_specs: dict[str, ActionSpec] = self._load_action_specs()
         self._recent_events: list[str] = []
+        self._advisor_name = "unknown"
 
     # ------------------------------------------------------------------
     # construction
@@ -124,6 +128,7 @@ class Environment:
     # ------------------------------------------------------------------
     def reset(self) -> Observation:
         self.state = self._build_initial_state()
+        self._advisor_name = getattr(self, "_advisor_name", "unknown")
         self._recent_events = [
             "赵建国今天打开了'安薪'App，准备求助。",
             f"他手头持有：手写工资结算单一张（欠{self.state.financial.total_owed}元），"
@@ -153,10 +158,12 @@ class Environment:
             return True
         return False
 
-    def available_actions(self) -> list[ActionSpec]:
+    def available_actions(self, include_final: bool = False) -> list[ActionSpec]:
         """Return action specs whose preconditions currently pass."""
         out = []
         for spec in self.action_specs.values():
+            if spec.id == "A_FINAL" and not include_final:
+                continue
             ok, _ = evaluate_preconditions(spec, self.state)
             if ok:
                 out.append(spec)
@@ -211,7 +218,38 @@ class Environment:
         """Run the judgment engine on the current (terminal) state."""
         from judge.judgment_engine import JudgmentEngine
         engine = JudgmentEngine()
-        return engine.adjudicate(self.state, self.case_data)
+        return engine.adjudicate(self.state, self.case_data, advisor_name=self._advisor_name)
+
+    def finalize(self):
+        """Run final channel-aware adjudication."""
+        from judge.judgment_engine import Judgment, JudgmentMonetaryAward, JudgmentEngine
+
+        fs = self.state.final_submission
+        if fs is None:
+            return self.adjudicate()
+
+        if fs.channel_id == "CH_GIVE_UP":
+            return Judgment(
+                case_id=self.state.case_id,
+                advisor_name=self._advisor_name,
+                terminal_reason="abandoned",
+                days_elapsed=self.state.current_day,
+                procedural_stage_at_end=self.state.procedural_stage.value,
+                primary_respondent=None,
+                summary_in_plain_chinese="赵建国最终没有提交维权材料，欠薪未追回。",
+                formal_judgment_text="（未进入正式处理程序）",
+                monetary_award=JudgmentMonetaryAward(),
+                critical_misses=["未进入任何正式程序，76600元欠薪全部未追回"],
+            )
+
+        engine = JudgmentEngine()
+        return engine.adjudicate(
+            self.state,
+            self.case_data,
+            advisor_name=self._advisor_name,
+            channel_id=fs.channel_id,
+            final_submission=fs,
+        )
 
     # ------------------------------------------------------------------
     # internal helpers

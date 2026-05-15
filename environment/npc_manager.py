@@ -14,6 +14,8 @@ from npcs.li_dahai import LiDahaiNPC
 from npcs.wang_pei import WangPeiNPC
 from npcs.zhang_guohua import ZhangGuohuaNPC
 from npcs.chen_wei import ChenWeiNPC
+from npcs.arbitrator import ArbitratorNPC
+from npcs.judge import JudgeNPC
 
 if TYPE_CHECKING:
     from environment.state import CaseState
@@ -24,13 +26,16 @@ NPC_REGISTRY: dict[str, type[BaseNPC]] = {
     "wang_pei": WangPeiNPC,
     "zhang_guohua": ZhangGuohuaNPC,
     "chen_wei": ChenWeiNPC,
+    "arbitrator": ArbitratorNPC,
+    "judge": JudgeNPC,
 }
 
 
 class NpcManager:
-    def __init__(self, npc_data_list: list[dict]):
+    def __init__(self, npc_data_list: list[dict], legal_knowledge_pack: dict | None = None):
         # npc_data_list comes from case_json["npcs"]
         self.npcs: dict[str, BaseNPC] = {}
+        self.legal_knowledge_pack = legal_knowledge_pack or {}
         for npc_data in npc_data_list:
             cls = NPC_REGISTRY.get(npc_data["id"])
             if cls is None:
@@ -38,6 +43,11 @@ class NpcManager:
             self.npcs[npc_data["id"]] = cls(npc_data)
 
     def get(self, npc_id: str) -> BaseNPC:
+        if npc_id not in self.npcs:
+            cls = NPC_REGISTRY.get(npc_id)
+            if cls is None:
+                raise KeyError(npc_id)
+            self.npcs[npc_id] = cls({"id": npc_id})
         return self.npcs[npc_id]
 
     def interact(
@@ -81,6 +91,7 @@ class NpcManager:
             extras.append("via_old_phone")
         if npc_id == "li_dahai" and contact_method != "new_phone":
             extras.append("via_new_phone_unknown")
+        extras.extend(self._legal_facts_for(npc_id))
 
         prior = [
             {"worker": inter.worker_message, "npc": inter.npc_response}
@@ -96,6 +107,23 @@ class NpcManager:
             extra_facts_visible=extras,
         )
         return npc.respond(ctx)
+
+    def _legal_facts_for(self, npc_id: str) -> list[str]:
+        role_map = {
+            "zhang_guohua": "general_contractor",
+            "wang_pei": "subcontractor",
+            "chen_wei": "inspector",
+            "arbitrator": "arbitrator",
+            "judge": "judge",
+        }
+        role = role_map.get(npc_id)
+        if not role:
+            return []
+        facts = []
+        for source in self.legal_knowledge_pack.get("sources", []):
+            if role in source.get("applies_to", []):
+                facts.append(f"{source.get('title')}: {source.get('rule')}")
+        return facts[:5]
 
     def _compute_pressure(self, npc_id: str, state: "CaseState") -> int:
         """

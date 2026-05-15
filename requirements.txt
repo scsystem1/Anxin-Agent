@@ -2,6 +2,9 @@
 openai>=1.0.0          # works with any OpenAI-compatible endpoint (Doubao, DeepSeek, Qwen, ...)
 python-dotenv>=1.0.0   # .env file support
 httpx>=0.25.0          # used by openai SDK; explicit listing for clarity
+fastapi>=0.110.0       # interactive session API
+uvicorn>=0.27.0        # FastAPI dev server
+pydantic>=2.0.0        # API schemas
 
 # Type hints support on older Pythons (>=3.10 has it natively)
 typing-extensions>=4.0.0

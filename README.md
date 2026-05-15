@@ -28,14 +28,18 @@ pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env，填入 ANXIN_LLM_API_KEY 等
 
-# 3. 跑双 advisor 对比
+# 3. 跑双 advisor 对比（命令行旧流程）
 python run.py
 
-# 4. 单独跑一个
-python run.py --advisor anxin
-python run.py --advisor doubao
+# 4. 启动最终交互式 Demo API + 前端静态构建
+python -m uvicorn api.server:app --reload --port 8000
+# 打开 http://localhost:8000
 
-# 5. 输出在 ./out/comparison_report.md
+# 5. 前端开发模式（可选）
+cd frontend
+npm install
+npm run dev
+# 打开 http://localhost:5173
 ```
 
 ## 项目结构
