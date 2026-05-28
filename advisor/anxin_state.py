@@ -40,9 +40,11 @@ class AnxinInternalState:
     contacted_zhang_guohua: bool = False
     contacted_chen_wei: bool = False
 
-    # Turn counter
+    # Action history tracking
     turn_count: int = 0
     last_action_id: str = ""
+    actions_done: set[str] = field(default_factory=set)  # track which actions completed
+    a008_done_count: int = 0  # prevent A008 loop
 
     # What the worker seems to know
     worker_knows_hongji_responsibility: bool = False
@@ -88,6 +90,7 @@ class AnxinInternalState:
 
         if "保全" in msg or "冻结" in msg or "查封" in msg:
             self.asset_freeze = True
+            self.a008_done_count += 1
 
         if "刑事" in msg or "报案" in msg or "拒不支付" in msg:
             self.criminal_filed = True
@@ -129,6 +132,8 @@ class AnxinInternalState:
 
     def infer_stage(self) -> str:
         """Infer current stage from internal state."""
+        if self.arbitration_filed and self.asset_freeze:
+            return "arbitration_and_preservation_done"
         if self.arbitration_filed:
             return "arbitration_filed"
         if self.limit_order_issued:
@@ -154,6 +159,8 @@ class AnxinInternalState:
             + (f"（投诉对象：{self.inspection_target}）" if self.complained_to_inspection else ""),
             f"- 是否有限期整改令：{'是' if self.limit_order_issued else '否'}",
             f"- 是否已申请仲裁：{'是' if self.arbitration_filed else '否'}",
+            f"- 是否已申请财产保全：{'是' if self.asset_freeze else '否'}"
+            + (f"（已申请{self.a008_done_count}次，不要再重复！）" if self.a008_done_count > 0 else ""),
             f"- 是否已联系NPC：李大海={'是' if self.contacted_li_dahai else '否'}，"
             f"王培={'是' if self.contacted_wang_pei else '否'}，"
             f"张国华={'是' if self.contacted_zhang_guohua else '否'}，"

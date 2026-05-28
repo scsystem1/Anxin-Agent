@@ -96,7 +96,11 @@ class AnxinAdvisor(Advisor):
     def _generate_stage_hints(self, stage: str) -> list[str]:
         """Generate action hints based on inferred stage when LLM doesn't provide them."""
         guidance = STAGE_GUIDANCE.get(stage, STAGE_GUIDANCE["initial"])
-        return list(guidance.get("hints", []))
+        hints = list(guidance.get("hints", []))
+        # Filter out A008 if preservation already done
+        if self._internal_state.a008_done_count >= 1:
+            hints = [h for h in hints if "A008" not in h]
+        return hints
 
     @staticmethod
     def _parse_action_hints(text: str) -> tuple[str, list[str]]:
