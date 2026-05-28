@@ -142,4 +142,4 @@ def save_comparison_artifacts(report: ComparisonReport, out_dir: str = "./out") 
         json.dump(_serialize_episode(report.anxin_result), f, ensure_ascii=False, indent=2)
     with open(f"{out_dir}/doubao_run.json", "w", encoding="utf-8") as f:
         json.dump(_serialize_episode(report.doubao_result), f, ensure_ascii=False, indent=2)
-    print(f"\n✓ Artifacts saved to {out_dir}/")
+    print(f"\nArtifacts saved to {out_dir}/")
