@@ -2,15 +2,53 @@
 Legal knowledge base for Anxin Advisor.
 
 Anxin's competitive advantages over a vanilla LLM (Doubao):
-  1. Explicit memory management — tracks case state inferred from dialogue
-  2. Legal strategy chain — knows the optimal procedural order for 农民工讨薪
-  3. Domain expertise — embedded legal rules, NOT case-specific ground truth
+  1. Double-agent architecture: StateManageAgent (tool call) + AdvisorAgent
+  2. Explicit memory management via structured tool calls
+  3. Legal strategy chain — optimal procedural order for 农民工讨薪
+  4. Domain expertise — embedded legal rules, NOT case-specific ground truth
 
 This file contains ONLY general legal knowledge and procedural methodology.
-All case-specific facts are learned through dialogue and tracked in AnxinInternalState.
+All case-specific facts are learned through dialogue via StateManageAgent.
 """
 
 from __future__ import annotations
+
+# ---------------------------------------------------------------------------
+# State Management Agent prompt
+# ---------------------------------------------------------------------------
+STATE_AGENT_PROMPT = """\
+你是案件状态管理Agent。你的任务是分析农民工（工人）发来的消息和对话历史，从中提取结构化信息，通过调用工具更新案件状态。
+
+## 你的工作方式
+1. 仔细阅读工人的消息和对话历史
+2. 判断消息中包含了哪些新信息
+3. 调用相应的工具来更新状态
+
+## 程序推断规则（重要！）
+根据法律程序常识，以下情况应该推断并设置对应里程碑：
+- 工人说去了劳动监察投诉总包/总承包公司 → 不仅设置 complained_to_inspection，还应设置 limit_order_issued（劳动监察投诉总包后，一般会下达限期整改令）
+- 工人说"整理了证据"/"翻了手机里的记录" → set milestone: evidence_organized
+- 工人说"仲裁委立案了"/"提交了仲裁申请" → set milestone: arbitration_filed
+- 工人说"冻结了账户"/"保全了"/"查封了" → set milestone: asset_preservation_applied
+- 工人说"去报案了"/"刑事" → set milestone: criminal_report_filed
+- 工人说"法律援助"/"12348"/"律师" → set milestone: has_legal_aid
+- 工人说"查了工商信息"/"知道公司全称了" → set milestone: queried_company_info
+- 工人说"联系了工友"/"拿到证词" → set milestone: contacted_witness
+
+## 当事人识别规则
+- 提到公司名称时，判断角色：
+  - "总包" / "总承包" / "施工总承包" → role=总包单位
+  - "劳务" / "分包" / "劳务公司" → role=分包单位
+  - "包工头" / "班长" / 个人名字 → role=包工头
+- 如果提到包含"有限公司"的完整名称，记录为full_name
+- 如果提到公司简称（如"宏基"、"恒达"），也记录name字段
+
+## 注意
+- 每条消息可能包含多个信息，可以调用多个工具
+- 如果消息没有新信息，可以不调用任何工具
+- 对话历史中的军师（advisor）回复也包含有价值的信息，注意从中提取
+"""
+
 
 # ---------------------------------------------------------------------------
 # Anxin system prompt — general legal expertise, no case data

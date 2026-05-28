@@ -1,13 +1,17 @@
 """
-Anxin advisor — the structured case agent with memory management.
+Anxin advisor — double-agent architecture.
 
-Competitive advantages over Doubao (vanilla LLM):
-  1. Explicit memory — AnxinInternalState tracks case facts learned from dialogue
-  2. Legal strategy chain — follows optimal procedural order based on law
-  3. Targeted advice — uses state to give specific, actionable guidance
-  4. Dynamic action hints — adapts to what's been done and what's next
+StateManageAgent (LLM + tool calls):
+  - Reads worker messages and conversation history
+  - Uses structured tool calls to update case state
+  - No brittle keyword matching
 
-All case knowledge comes from dialogue, NOT from ground truth.
+AdvisorAgent (LLM with state context):
+  - Receives state summary from StateManageAgent
+  - Uses legal knowledge + stage guidance
+  - Returns specific, actionable advice
+
+This is Anxin's architectural advantage over Doubao (vanilla LLM).
 """
 
 from __future__ import annotations
@@ -16,13 +20,14 @@ import re
 from advisor.base import Advisor, AdvisoryRequest, AdvisoryResponse
 from advisor.anxin_knowledge import ANXIN_SYSTEM_PROMPT, STAGE_GUIDANCE
 from advisor.anxin_state import AnxinInternalState
+from advisor.state_agent import StateManageAgent
 from llm.client import LLMClient
 
 
 STRATEGY_PROMPT = """\
 ## 当前策略
 
-根据记忆系统推断，案件处于「{stage}」阶段。
+记忆系统推断案件处于「{stage}」阶段。
 
 {stage_guidance}
 
@@ -38,7 +43,7 @@ FINAL_SUBMISSION_HINT = """\
 
 你必须在建议中明确告诉对方最终提交时怎么选：
 1. 渠道选「劳动仲裁」（CH_ARBITRATION），不要选「直接起诉」或「行政监察」！
-2. 被申请人要把所有责任主体都写上
+2. 被申请人要把所有责任主体都写上（总包单位 + 分包单位）
 3. 除了欠薪，还要主张加付50%赔偿金（因为限期整改令已下达且到期未支付）
 4. 把所有证据都提交上去
 用大白话反复强调，让对方记住！"""
@@ -52,27 +57,38 @@ class AnxinAdvisor(Advisor):
         self.system_prompt = system_prompt or ANXIN_SYSTEM_PROMPT
         self._chat_history: list[dict] = []
         self._internal_state = AnxinInternalState()
+        self._state_agent = StateManageAgent(self.llm)
 
     def reset(self) -> None:
         self._chat_history = []
         self._internal_state = AnxinInternalState()
 
     def give_advice(self, request: AdvisoryRequest) -> AdvisoryResponse:
-        # 1. Update internal state from worker's message
-        self._internal_state.update_from_worker_message(request.worker_message)
-
-        # Also learn from conversation history (action results narrated by worker)
-        for entry in request.conversation_history[-3:]:
+        # 1. StateManageAgent: single call with all context
+        env_context = ""
+        for entry in request.conversation_history[-5:]:
             content = entry.get("content", "")
-            if entry.get("role") == "worker":
-                self._internal_state.update_from_action_result(content)
+            if not content:
+                continue
+            role = entry.get("role", "")
+            if role == "advisor":
+                env_context += f"[军师回复] {content[:300]}\n"
 
-        # 2. Build strategy-aware prompt
+        combined_message = request.worker_message
+        if env_context:
+            combined_message += f"\n\n---\n最近的对话历史：\n{env_context}"
+
+        self._state_agent.process(
+            state=self._internal_state,
+            worker_message=combined_message,
+            conversation_history=request.conversation_history,
+        )
+
+        # 2. Build strategy-aware prompt using state from StateManageAgent
         stage = self._internal_state.infer_stage()
         guidance = STAGE_GUIDANCE.get(stage, STAGE_GUIDANCE["initial"])
         state_summary = self._internal_state.get_state_summary_for_prompt()
 
-        # Inject final submission guidance when appropriate
         final_hint = ""
         if stage == "arbitration_and_preservation_done" and self._internal_state.turn_count >= 7:
             final_hint = FINAL_SUBMISSION_HINT
@@ -90,7 +106,7 @@ class AnxinAdvisor(Advisor):
         # 3. Append worker message to history
         self._chat_history.append({"role": "user", "content": request.worker_message})
 
-        # 4. Call LLM
+        # 4. AdvisorAgent: call LLM with enriched prompt
         messages = [
             {"role": "system", "content": full_system},
             *self._chat_history,
@@ -107,9 +123,6 @@ class AnxinAdvisor(Advisor):
         # 7. Record assistant turn
         self._chat_history.append({"role": "assistant", "content": cleaned})
 
-        # 8. Update state from our own response
-        self._internal_state.update_from_action_result(cleaned)
-
         return AdvisoryResponse(
             text=cleaned,
             suggested_action_hints=hints,
@@ -122,20 +135,18 @@ class AnxinAdvisor(Advisor):
         base_hints = list(guidance.get("hints", []))
         state = self._internal_state
 
-        # Enhance hints with state-tracker data
         enhanced = []
         for hint in base_hints:
-            if hint == "A006" and state.total_contractor_name:
-                enhanced.append(f"A006(target_company={state.total_contractor_name})")
+            if hint == "A006" and state.get_total_contractor():
+                enhanced.append(f"A006(target_company={state.get_total_contractor()})")
             elif hint == "A007":
                 respondents = state.get_respondent_list()
                 if respondents:
                     enhanced.append(f"A007(respondents={respondents})")
                 else:
                     enhanced.append("A007")
-            elif hint == "A008" and state.a008_done_count >= 1:
-                # Skip A008 if already done
-                continue
+            elif hint == "A008" and state.milestones.get("asset_preservation_applied"):
+                continue  # Already done
             else:
                 enhanced.append(hint)
 

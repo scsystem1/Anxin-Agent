@@ -143,15 +143,11 @@ def handle_A006_complain_to_inspection(state, action, deps) -> ActionResult:
         )
     elif targets_hengda:
         narration = (
-            "陈科长受理了对恒达的投诉，但提示：建议同时把总包宏基"
-            "也列入投诉对象，因为根据规定总包对农民工工资负有先行"
-            "清偿责任。是否补充？（陈科长不会替工人改投诉书）"
+            "陈科长受理了对恒达劳务的投诉，启动调查。"
         )
     else:
         narration = (
-            "陈科长说：投诉对象是包工头李大海，但李大海是个人，"
-            "不是劳动保障监察的常规执法对象。建议把恒达劳务和总包"
-            "宏基建设列入投诉对象。"
+            "陈科长说：投诉对象是个人，不属于劳动保障监察的常规受理范围。"
         )
 
     return ActionResult(

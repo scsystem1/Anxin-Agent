@@ -146,6 +146,92 @@ class LLMClient:
         unsupported_markers = ("ark", "dashscope", "volces", "volcengine")
         return any(marker in base_url for marker in unsupported_markers)
 
+    def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        tool_executor: Any,
+        *,
+        temperature: float = 0.3,
+        max_tokens: int = 2048,
+        max_rounds: int = 3,
+        purpose: str = "",
+    ) -> str:
+        """
+        Chat with tool calling support.
+
+        Args:
+            messages: conversation messages (may include tool results)
+            tools: OpenAI-format tool definitions
+            tool_executor: callable(name, arguments_dict) -> result_dict
+            max_rounds: max tool-calling rounds before forcing text response
+
+        Returns:
+            Final assistant text response after all tool calls resolved.
+        """
+        import json as _json
+
+        for _ in range(max_rounds):
+            t0 = time.time()
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self.config.model,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            except Exception as e:
+                last_err = e
+                if "tool" in str(e).lower():
+                    # If tool calling fails, retry without tools
+                    resp = self._client.chat.completions.create(
+                        model=self.config.model,
+                        messages=messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+                else:
+                    raise
+
+            choice = resp.choices[0]
+            msg = choice.message
+            elapsed_ms = int((time.time() - t0) * 1000)
+            in_chars = sum(len(str(m.get("content", ""))) for m in messages)
+            print(
+                f"[LLM/{purpose or 'tools'}] {self.config.model} | "
+                f"{elapsed_ms}ms | tool_calls={len(msg.tool_calls or [])}",
+                file=sys.stderr,
+            )
+
+            # No tool calls — return text directly
+            if not msg.tool_calls:
+                return msg.content or ""
+
+            # Execute tool calls
+            messages.append(msg.model_dump())
+            for tc in msg.tool_calls:
+                try:
+                    args = _json.loads(tc.function.arguments)
+                except _json.JSONDecodeError:
+                    args = {}
+                result = tool_executor(tc.function.name, args)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": _json.dumps(result, ensure_ascii=False),
+                })
+
+        # Exhausted rounds — force a text-only final response
+        resp = self._client.chat.completions.create(
+            model=self.config.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return resp.choices[0].message.content or ""
+
     def chat_json(
         self,
         messages: list[dict[str, str]],
