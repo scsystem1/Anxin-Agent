@@ -44,9 +44,20 @@ class AdvisoryRequest:
     #   The advisor uses this for context within the conversation only.
 
     advisor_session_id: str = ""
-    # ↑ For advisors that maintain server-side state (like the real Anxin
+    # ? For advisors that maintain server-side state (like the real Anxin
     #   agent), this id can be used to resume. Default "" means stateless.
 
+    current_turn_index: int = 0
+    # The 0-based index of the current advisor turn.
+
+    max_turns: int = 0
+    # The total turn budget for this episode/session.
+
+    remaining_turns: int = 0
+    # How many turns remain after this advisor response is delivered.
+
+    is_final_turn: bool = False
+    # Whether the worker will finalize immediately after reading this advice.
 
 @dataclass
 class AdvisoryResponse:

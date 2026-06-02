@@ -98,6 +98,10 @@ class EpisodeRunner:
             req = AdvisoryRequest(
                 worker_message=request_obj.text,
                 conversation_history=list(conversation_history),
+                current_turn_index=turn_idx,
+                max_turns=self.max_turns,
+                remaining_turns=max(0, self.max_turns - turn_idx - 1),
+                is_final_turn=(turn_idx == self.max_turns - 1),
             )
             self._log(f"\n══ Turn {turn_idx + 1} ── 第{obs.day}天 ──")
             self._log(f"[Worker → Advisor] {request_obj.text}")
@@ -111,7 +115,7 @@ class EpisodeRunner:
             conversation_history.append({"role": "worker", "content": request_obj.text})
             conversation_history.append({"role": "advisor", "content": response.text})
 
-            is_last_turn = turn_idx == self.max_turns - 1
+            is_last_turn = req.is_final_turn
             if is_last_turn:
                 from environment.actions import make_final_action
 

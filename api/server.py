@@ -122,6 +122,10 @@ class DemoSession:
             worker_message=request_obj.text,
             conversation_history=list(self.conversation_history),
             advisor_session_id=self.session_id,
+            current_turn_index=self.turn_index,
+            max_turns=self.max_turns,
+            remaining_turns=max(0, self.max_turns - self.turn_index - 1),
+            is_final_turn=is_last,
         )
         response = self.advisor.give_advice(req)
         self.conversation_history.append({"role": "worker", "content": request_obj.text})

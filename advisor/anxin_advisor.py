@@ -27,6 +27,11 @@ from llm.client import LLMClient
 STRATEGY_PROMPT = """\
 ## 当前策略
 
+## Turn Budget
+- 当前是第{turn_number}/{max_turns}轮
+- 本轮回复后剩余轮次：{remaining_turns}
+- Is final advice turn: {is_final_turn}
+
 记忆系统推断案件处于「{stage}」阶段。
 
 {stage_guidance}
@@ -61,6 +66,22 @@ FINAL_SUBMISSION_HINT = """\
 3. 除了欠薪，还要主张加付50%赔偿金（因为限期整改令已下达且到期未支付）
 4. 把所有证据都提交上去
 用大白话反复强调，让对方记住！"""
+
+FINAL_BUDGET_GUARDRAIL = """\
+## 最后一轮收束规则（必须遵守）
+
+这是 advisor 在最终提交前的最后一次发言。你的任务不是再打开新问题，不是再让工人下一轮去问、去补潜在材料，而是帮他用现有手上的成果做最优提交。
+请在内部按以下顺序做判断，但不要把这个检查清单原样输出：
+1. 现在手上已经有哪些证据，哪些是足以支撑最终提交的关键证据。
+2. 现在已经可以合理选哪个最终渠道，不要再建议新的中间步骤。
+3. 最终提交时被申请人名单、欠薪金额、证据清单要怎么组合才是最优解。
+
+输出要求：
+- 不要再问开放式问题，不要说“如果有时间再”“你可以再去”“下一步再”。
+- 直接告诉他“现在就怎么提交”。
+- 直接指出最优渠道、被申请人、金额、证据提交策略。
+- 如果证据还有缺口，只在不改变最终提交决策的前提下，用一句说明“缺的那一项可以后续补充”，不要回到探索模式。
+"""
 
 
 class AnxinAdvisor(Advisor):
@@ -104,10 +125,16 @@ class AnxinAdvisor(Advisor):
         state_summary = self._internal_state.get_state_summary_for_prompt()
 
         final_hint = ""
-        if stage == "arbitration_and_preservation_done" and self._internal_state.turn_count >= 7:
+        if request.is_final_turn:
+            final_hint = FINAL_BUDGET_GUARDRAIL + "\n\n" + FINAL_SUBMISSION_HINT
+        elif stage == "arbitration_and_preservation_done" and self._internal_state.turn_count >= 7:
             final_hint = FINAL_SUBMISSION_HINT
 
         strategy_block = STRATEGY_PROMPT.format(
+            turn_number=request.current_turn_index + 1,
+            max_turns=request.max_turns or "?",
+            remaining_turns=request.remaining_turns,
+            is_final_turn="YES" if request.is_final_turn else "NO",
             stage=stage,
             stage_guidance=guidance["advice_focus"],
             state_summary=state_summary,
