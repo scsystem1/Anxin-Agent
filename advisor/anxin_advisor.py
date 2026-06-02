@@ -41,6 +41,11 @@ STRATEGY_PROMPT = """\
 3. 程序边界：当前是否有正式受理、整改令、立案、保全等可验证结果。
 
 如果某个边界不清，下一步优先做“最小核实/补正动作”，而不是继续推进到更后面的法律程序。
+主体边界不清时尤其要保守：不要把“工人找过某公司”“某公司推给另一家公司”“监察员口头说也加上某公司”“工人自己说好像某公司是总包”当成总包确认。
+只有以下来源能锁定主体角色：项目公示牌、施工许可证、实名制台账、劳动监察书面材料、工商/住建查询结果。
+如果工人把总包和分包说反了，先温和纠偏，并让他做一个很小的确认动作：拍清楚公示牌，或把公示牌上“施工总承包单位：____；劳务分包单位：____”逐字念给你。
+在主体未锁定前，不要输出带具体公司的 A006(target_company=...)；可以建议先核实主体，避免 worker 顺着错误 hints 投诉错对象。
+最终提交前必须做“主体-金额-渠道”三项复核：总包/分包角色有没有可靠来源，欠薪金额是否沿用已确认金额，被申请人是否覆盖总包和分包。
 
 如果对方告诉你刚才做了某个行动，你要根据结果判断下一步。
 如果对方已经做了你需要他做的事，就推进到下一个阶段。
@@ -146,8 +151,11 @@ class AnxinAdvisor(Advisor):
 
         enhanced = []
         for hint in base_hints:
-            if hint == "A006" and state.get_total_contractor():
-                enhanced.append(f"A006(target_company={state.get_total_contractor()})")
+            if hint == "A006":
+                # Keep the fallback hint conservative. Subject identity can be
+                # misreported by the worker, so only the AdvisorAgent's explicit
+                # text/hints should bind A006 to a concrete company.
+                enhanced.append("A006")
             elif hint == "A007":
                 respondents = state.get_respondent_list()
                 if respondents:
