@@ -14,7 +14,13 @@ Once the LLM API is configured in .env, this should run end-to-end.
 
 from __future__ import annotations
 import argparse
+import json
+from dataclasses import asdict
+from pathlib import Path
 import sys
+
+# Ensure stdout can handle Unicode (e.g. ⚠) on Windows GBK consoles.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from config import get_run_config
 from environment.env import Environment
@@ -70,6 +76,22 @@ def main() -> int:
     worker = SimulatedWorker()
     advisor = AnxinAdvisor() if args.advisor == "anxin" else DoubaoAdvisor()
     result = EpisodeRunner(env, worker, advisor, max_turns=max_turns, verbose=verbose).run()
+
+    # Save result to JSON for later comparison
+    out_path = Path(out_dir) / f"{args.advisor}_run.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Use the same serialization format as save_comparison_artifacts
+    result_dict = {
+        "advisor_name": result.advisor_name,
+        "total_turns": result.total_turns,
+        "total_days": result.total_days,
+        "terminal_reason": result.terminal_reason,
+        "transcript": [asdict(t) for t in result.transcript],
+        "final_judgment": asdict(result.final_judgment) if result.final_judgment else None,
+    }
+    out_path.write_text(json.dumps(result_dict, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nSaved: {out_path}")
+
     print("\n" + "=" * 60)
     print(f"█ {args.advisor.upper()} RESULT █")
     print("=" * 60)

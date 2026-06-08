@@ -37,6 +37,8 @@ class FakeLLM:
             return "我这个工资还没拿到，下一步咋办？"
         if purpose == "advisor_anxin":
             return "先按我说的做，材料要写清楚。"
+        if purpose == "advisor_doubao":
+            return "嗯，你这个情况确实挺急的。建议先把手上的材料整理好，然后去找劳动监察部门问问看。"
         if purpose.startswith("npc_chen"):
             return "你这个投诉我先登记，材料齐的话我们会向总包调取台账。"
         if purpose.startswith("npc_"):
@@ -255,6 +257,25 @@ class SandboxSmokeTests(unittest.TestCase):
             body = final.json()
             self.assertEqual(body["channel_id"], "CH_ARBITRATION")
             self.assertIn("judgment", body)
+
+    def test_doubao_pipeline_runs_with_mock_llm(self):
+        """Run a full Doubao pipeline and verify baseline characteristics."""
+        from advisor.doubao_advisor import DoubaoAdvisor
+
+        FakeLLM.action_index = 0
+        with patch("llm.client.LLMClient.from_env", return_value=FakeLLM()):
+            env = Environment.from_case_file(CASE_PATH)
+            worker = SimulatedWorker()
+            advisor = DoubaoAdvisor()
+            result = EpisodeRunner(env, worker, advisor, max_turns=3, verbose=False).run()
+
+        self.assertIsNotNone(result.final_judgment)
+        self.assertEqual(result.advisor_name, "doubao")
+
+        for turn in result.transcript:
+            self.assertEqual(turn.advisor_hints, [],
+                             f"Doubao no hints at turn {turn.turn_index}")
+        self.assertEqual(result.total_turns, 3)
 
 
 if __name__ == "__main__":
